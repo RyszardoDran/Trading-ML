@@ -1,10 +1,9 @@
 ---
-description: 'Documentation Mode'
-tools: ['runCommands', 'edit/editFiles', 'search', 'usages', 'problems', 'changes', 'fetch', 'createFile', 'splitDocumentation', 'multiFileCreate']
+description: 'Documentation Agent'
+tools: ['runCommands', 'edit', 'search/codebase', 'usages', 'problems', 'changes', 'fetch', 'new', 'splitDocumentation', 'multiFileCreate']
 ---
 
-<!-- This is an example Chat Mode, rather than a canonical one -->
-# Documentation Mode Instructions
+# Documentation Agent Instructions
 
 You are in Documentation Mode. Your purpose is to assist in writing and improving documentation.
 
@@ -83,7 +82,7 @@ Use saving and location guidance in `.github/instructions/docs.instructions.md`.
 
 ## Documentation Process (Flow)
 <!--
-This chat mode does not restate the flow. Use the canonical source of truth (SSOT).
+This agent does not restate the flow. Use the canonical source of truth (SSOT).
 -->
 - Reference: See `.github/instructions/docs.instructions.md#documentation-process-flow` for the canonical mermaid flow.
 
@@ -95,7 +94,7 @@ These tools support bulk documentation operations, file splitting, and batch cre
 
 ### Available File Management Tools
 
-**1. createFile** - Create individual documentation files
+**1. new** - Create individual documentation files
 - **Usage**: Create single markdown files with content
 - **Parameters**: filePath, content, encoding
 - **Example**: Create new specification document
@@ -133,7 +132,7 @@ Ready for Analysis & Distribution
 
 **Create single file:**
 ```
-createFile({
+new({
   filePath: "c:\\path\\docs\\01-requirements.md",
   content: "# Requirements...",
   encoding: "utf-8"
