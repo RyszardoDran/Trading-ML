@@ -25,31 +25,48 @@ This document provides **comprehensive ML architecture** tailored for:
 
 ## 2. Data Characteristics & Implications
 
-### 2.1 Data Profile
+### 2.1 Data Profile (Verified - December 2025)
+
+**Storage Location**: `ml/src/data/XAU_1m_data_*.csv` (22 files)
 
 | Characteristic | Value | Implication |
 |---|---|---|
-| **Time Period** | 20+ years (2004-2025) | Sufficient for multiple market regimes |
-| **Granularity** | 1-minute OHLCV | High frequency, need downsampling to 5-min |
-| **Total Samples** | 20M+ rows | Manageable; batch processing recommended |
-| **Liquidity** | Very High (gold futures) | Minimal gaps/slippage; clean data expected |
-| **Seasonality** | Yes (trading hours) | Include time-of-day features |
+| **Time Period** | 22 years (2004-2025) | Complete market cycles; multiple regimes |
+| **Granularity** | 1-minute OHLCV (5-minute planned) | High frequency; XAU/USD tick data |
+| **Total Samples** | ~5.3M+ 1-min candles | Manageable; batch processing recommended |
+| **Data Storage** | 327.2 MB (22 CSV files) | Fits in memory; fast with Polars |
+| **Price Range** | $384 (2004) → $2625 (2025) | High volatility across regimes |
+| **Liquidity** | Very High (OTC forex 23/5) | Minimal gaps; consistent 1-min bars |
+| **Seasonality** | Yes (trading hours: 07:00-23:00 CET) | Include time-of-day features |
 | **Trend Regimes** | Multiple (bull/bear/range) | Need regime-aware features |
-| **Volatility** | Variable (20-40 ATR typically) | Include volatility normalization |
+| **Volatility** | Variable (observed ATR ~20-40 pips) | Include volatility normalization |
+
+**Data Format**:
+```
+Date;Open;High;Low;Close;Volume
+2004.06.11 07:18;384;384.1;384;384;3
+2004.06.11 07:23;384.1;384.1;384;384;2
+...
+2025.01.02 01:00;2624.48;2625.06;2624.41;2624.83;49
+2025.01.02 01:01;2624.86;2624.99;2624.78;2624.84;56
+```
 
 ### 2.2 Key Considerations for ML
 
 ✅ **Advantages of Your Data:**
-- Very liquid → minimal gaps and outliers
-- Long history → multiple market cycles
-- High frequency → good for capturing short-term patterns
-- Clear trading hours → predictable seasonality
+- **22 years of history** → sufficient for training/testing across multiple market cycles (2008 crisis, COVID, etc.)
+- **Very liquid XAU/USD** → minimal gaps and outliers; consistent 1-minute bars
+- **327.2 MB total** → fits in memory; fast loading with Polars
+- **Clear trading hours** (07:00-23:00 CET) → predictable seasonality patterns
+- **Known data quality** → verified structure: Date;Open;High;Low;Close;Volume
 
 ⚠️ **Challenges & Mitigations:**
-- **Class Imbalance**: Only ~30% of candles are valid signals → use stratified sampling + weighted loss
-- **Non-Stationary**: Market regime changes → retrain monthly + use walk-forward validation
-- **Overfitting Risk**: 20M samples but fewer true signals → use strong regularization + early stopping
-- **Data Leakage**: Future prices cannot influence past features → strict time-series splits
+- **Class Imbalance**: Only ~30% of candles expected as valid signals → use stratified sampling + scale_pos_weight
+- **Non-Stationary**: Market regime changes (2008 vs 2025) → walk-forward validation (re-train yearly)
+- **Overfitting Risk**: 5.3M samples but fewer true signals → L1/L2 regularization + early stopping
+- **Data Leakage**: Future prices cannot influence past features → strict chronological splits (no shuffling)
+- **Feature Stationarity**: XAU/USD price changed 6.8x over 22 years → normalize features within rolling windows
+- **Volume Sparsity**: Low volume (30-60 contracts/min) → use price-based features primarily
 
 ---
 
@@ -484,28 +501,34 @@ if model_drift > threshold:
 ### 8.1 Phase 1: Classical ML (4-6 weeks)
 
 **Week 1-2: EDA & Feature Engineering**
-- Load 20M rows of data (use Polars for speed)
-- Analyze OHLCV distributions
-- Create 40-50 core features
+- Load 22 years of data (~5.3M rows, 327MB) using Polars for speed
+- Parse Date format: `YYYY.MM.DD HH:MM` → datetime
+- Analyze OHLCV distributions across time periods
+- Check for gaps/anomalies during trading hours
+- Create 40-50 core features from raw OHLCV
+- Aggregate 1-minute data to 5-minute candles (required for signals)
 - Data quality validation
 
 **Week 3: Model Training**
-- Train XGBoost baseline
-- Train LightGBM alternative
-- Hyperparameter tuning (Optuna)
-- Walk-forward validation
+- Train XGBoost baseline on 2004-2023 data
+- Train LightGBM alternative for comparison
+- Hyperparameter tuning (Optuna) on 2004-2022 train + 2023 val
+- Walk-forward validation on multiple years
+- Early stopping on 2023 validation set
 
 **Week 4: Model Evaluation**
+- Test on 2024 (latest full year)
 - Analyze feature importance
 - SHAP value analysis
-- Error analysis
-- Threshold tuning
+- Error analysis by market regime
+- Threshold tuning for optimal precision/recall
 
 **Week 5-6: Production Prep**
 - Model serialization (pickle, ONNX)
-- Inference optimization
-- Documentation
+- Inference optimization (< 100ms latency)
+- Documentation of data pipeline
 - Deployment scripts
+- Setup monitoring for 2025 live data
 
 ### 8.2 Phase 2: Ensemble & Monitoring (Weeks 7-10)
 
