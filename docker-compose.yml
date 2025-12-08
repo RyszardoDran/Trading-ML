@@ -1,0 +1,44 @@
+version: '3.9'
+
+services:
+  # ML Training Service
+  ml-training:
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+      target: runtime
+    container_name: trading-ml-training
+    volumes:
+      - ./ml/src:/app/src
+      - ./ml/tests:/app/tests
+      - ./ml/models:/app/models
+      - ./ml/logs:/app/logs
+      - ./data:/app/data
+      - ./ml/notebooks:/app/notebooks
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python -m src.pipelines.training_pipeline
+    restart: unless-stopped
+
+  # Jupyter Notebook for Development
+  jupyter:
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+      target: runtime
+    container_name: trading-jupyter
+    volumes:
+      - ./ml/notebooks:/app/notebooks
+      - ./ml/src:/app/src
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JUPYTER_ENABLE_LAB=yes
+    ports:
+      - "8888:8888"
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
+    restart: unless-stopped
+
+networks:
+  trading-ml:
+    driver: bridge
