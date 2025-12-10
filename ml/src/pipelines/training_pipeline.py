@@ -18,14 +18,15 @@ Key principles:
 - Minimal external dependencies (pandas, numpy, sklearn, xgboost)
 
 Inputs (CSV):
-- Expected columns: [Date;Open;High;Low;Close;Volume]
-- Separator: `;`, Date parseable to datetime
-- Files pattern: `ml/src/data/XAU_1m_data_*.csv`
+- `ml/src/data/XAU_1m_data_*.csv`
 
-Artifacts:
-- `ml/models/xgb_model.pkl` (calibrated classifier)
-- `ml/models/feature_columns.json` (ordered feature names)
-- `ml/models/threshold.json` (selected classification threshold)
+Outputs (artifacts):
+- `ml/src/models/xgb_model.pkl` (calibrated classifier)
+- `ml/src/models/feature_columns.json` (ordered feature names)
+- `ml/src/models/threshold.json` (selected classification threshold)
+
+Expected columns: [Date;Open;High;Low;Close;Volume]
+Separator: `;`, Date parseable to datetime
 """
 
 import json
@@ -44,6 +45,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from xgboost import XGBClassifier
+# Early stopping support varies by xgboost version; we'll train without callbacks for compatibility
 
 
 logger = logging.getLogger(__name__)
@@ -61,12 +63,21 @@ def _validate_schema(df: pd.DataFrame) -> None:
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
 
-    # Ensure numeric dtypes
+    # Ensure numeric dtypes (coerce and drop bad rows)
     for c in ["Open", "High", "Low", "Close", "Volume"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
+    # Drop rows with NaNs after coercion (bad lines)
+    before = len(df)
+    df.dropna(subset=["Open", "High", "Low", "Close", "Volume"], inplace=True)
+    dropped = before - len(df)
+    if dropped > 0:
+        logger.warning(f"Dropped {dropped} rows with invalid numeric values")
+
     if (df[["Open", "High", "Low", "Close"]] <= 0).any().any():
         raise ValueError("OHLC contains non-positive values")
+    if (df["Volume"] < 0).any():
+        raise ValueError("Volume contains negative values")
     if (df["High"] < df["Low"]).any():
         raise ValueError("Price inconsistency: High < Low detected")
     if df.index.has_duplicates:
@@ -87,10 +98,23 @@ def load_all_years(data_dir: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"No data files found in {data_dir}")
     dfs: List[pd.DataFrame] = []
     for fp in files:
-        df = pd.read_csv(fp, sep=";", parse_dates=["Date"])  # semicolon-separated
+        # Robust CSV parsing: semicolon separator, strict Date handling
+        df = pd.read_csv(
+            fp,
+            sep=";",
+            parse_dates=["Date"],
+            dayfirst=False,
+            encoding="utf-8",
+            on_bad_lines="warn",
+        )
         df = df.rename(columns={c: c.strip() for c in df.columns})
         if "Date" not in df.columns:
             raise ValueError(f"File {fp} missing 'Date' column")
+        # Drop rows with invalid dates
+        bad_dates = df["Date"].isna().sum()
+        if bad_dates:
+            logger.warning(f"File {fp}: Dropping {bad_dates} rows with invalid Date")
+            df = df.dropna(subset=["Date"])
         df = df.set_index("Date")
         _validate_schema(df)
         dfs.append(df)
@@ -105,7 +129,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
     Features:
     - Log returns: 1, 5, 15-minute
-    - Volatility: rolling std of 1m returns (20, 60)
+    - Volatility: rolling std of 1-minute returns (20, 60)
     - Normalized range: (High-Low)/Close
     - Momentum: rolling mean of returns (10, 30)
     - Trend: EMA(12), EMA(26) spread normalized by Close
@@ -134,7 +158,8 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     vol60 = ret1.rolling(60, min_periods=60).std()
 
     # Range normalized
-    range_n = (high - low) / close
+    # Guard against divide-by-zero and extreme ranges
+    range_n = (high - low) / close.replace(0, np.nan)
 
     # Momentum
     mom10 = ret1.rolling(10, min_periods=10).mean()
@@ -178,6 +203,8 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
     features.replace([np.inf, -np.inf], np.nan, inplace=True)
     features = features.dropna()
+    if features.empty:
+        raise ValueError("Feature matrix is empty after cleaning; check input data quality")
     return features
 
 
@@ -196,7 +223,7 @@ def make_target(df: pd.DataFrame, horizon: int = 5, min_return_bp: float = 5.0) 
     Args:
         df: OHLCV DataFrame with `Close` column and datetime index
         horizon: Forward window size in minutes
-        min_return_bp: Minimum cumulative return threshold in basis points (1bp = 0.0001)
+        min_return_bp: Minimum cumulative return threshold in basis points (one basis point = 0.0001)
 
     Returns:
         pd.Series of 0/1 aligned to original index (NaNs dropped)
@@ -210,6 +237,8 @@ def make_target(df: pd.DataFrame, horizon: int = 5, min_return_bp: float = 5.0) 
     thr = min_return_bp * 1e-4
     target = (cum > thr).astype(int)
     target = target.dropna()
+    if target.empty:
+        raise ValueError("Target series is empty; adjust horizon/min_return_bp or verify data")
     return target
 
 
@@ -254,7 +283,9 @@ def split_time_series(
     y_test = y[(y.index > val_end) & (y.index <= test_end)]
 
     if min(map(len, [X_train, X_val, X_test])) == 0:
-        raise ValueError("One of the splits is empty; check data coverage for years 2023-2024")
+        raise ValueError(
+            "One of the splits is empty; verify data coverage for specified train/val/test ranges"
+        )
 
     return X_train, X_val, X_test, y_train, y_val, y_test
 
@@ -270,6 +301,10 @@ def train_xgb(
 
     Returns a `CalibratedClassifierCV` with sigmoid calibration on the held-out validation set.
     """
+    # Validate labels
+    if set(pd.Series(y_train).unique()) - {0, 1}:
+        raise ValueError("y_train must be binary {0,1}")
+
     pos = int(y_train.sum())
     neg = int((y_train == 0).sum())
     logger.info(f"Class balance (train): pos={pos}, neg={neg}")
@@ -284,6 +319,7 @@ def train_xgb(
         reg_lambda=1.0,
         reg_alpha=0.0,
         objective="binary:logistic",
+        eval_metric="logloss",
         random_state=random_state,
         n_jobs=-1,
         scale_pos_weight=scale_pos_weight,
@@ -297,7 +333,6 @@ def train_xgb(
         y_train,
         eval_set=[(X_val, y_val)],
         verbose=False,
-        early_stopping_rounds=50,
     )
 
     calibrated = CalibratedClassifierCV(base, method="sigmoid", cv="prefit")
@@ -306,7 +341,7 @@ def train_xgb(
 
 
 def _pick_best_threshold(y_true: pd.Series, proba: np.ndarray) -> float:
-    """Sweep thresholds and return the one maximizing F1 (ties → 0.5 fallback)."""
+    """Sweep thresholds and return the one maximizing F1 (ties -> 0.5 fallback)."""
     thresholds = np.linspace(0.05, 0.95, 19)
     best_thr, best_f1 = 0.5, -1.0
     for t in thresholds:
@@ -322,6 +357,8 @@ def evaluate(model: CalibratedClassifierCV, X_test: pd.DataFrame, y_test: pd.Ser
 
     Also logs a confusion matrix for the chosen threshold.
     """
+    if X_test.empty:
+        raise ValueError("X_test is empty; cannot evaluate")
     proba = model.predict_proba(X_test)[:, 1]
     roc = roc_auc_score(y_test, proba)
     pr_auc = average_precision_score(y_test, proba)
@@ -356,7 +393,7 @@ def run_pipeline() -> Dict[str, float]:
     """Execute end-to-end training with robust evaluation and artifact saving."""
     np.random.seed(42)
     data_dir = Path(__file__).parent.parent / "data"
-    models_dir = Path(__file__).parent.parent.parent / "models"
+    models_dir = Path(__file__).parent.parent / "models"
 
     logger.info("Loading data...")
     df = load_all_years(data_dir)
@@ -480,7 +517,7 @@ if __name__ == "__main__":
             # We avoid global state; compute y with provided args.
             np.random.seed(42)
             data_dir = Path(__file__).parent.parent / "data"
-            models_dir = Path(__file__).parent.parent.parent / "models"
+            models_dir = Path(__file__).parent.parent / "models"
 
             logger.info("Loading data...")
             df = load_all_years(data_dir)

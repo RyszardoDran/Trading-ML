@@ -52,11 +52,10 @@ ENV PATH=/root/.local/bin:$PATH
 # Copy ML project files
 COPY ml/src ./src
 COPY ml/tests ./tests
-COPY ml/notebooks ./notebooks
 COPY data ./data
 
 # Create necessary directories
-RUN mkdir -p logs models cache
+RUN mkdir -p src/logs src/models src/cache
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

@@ -66,8 +66,8 @@ def engineer_minimal_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def main() -> None:
     repo_root = Path(__file__).parents[2]
-    models_dir = repo_root / "ml" / "models"
-    data_dir = repo_root / "ml" / "src" / "data"
+    models_dir = repo_root / "models"
+    data_dir = repo_root / "data"
 
     # Load artifacts
     model_path = models_dir / "xgb_model.pkl"
