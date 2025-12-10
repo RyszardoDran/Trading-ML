@@ -11,6 +11,17 @@ Prosta konfiguracja Docker do pracy z ML pipeline'em.
 
 ## Setup
 
+### Nowe zmienne \.env
+
+Dodane zostały dwie obowiązkowe zmienne środowiskowe wykorzystywane przez pipeline:
+
+| Nazwa | Domyślna wartość | Opis |
+|-------|------------------|------|
+| `PYTHONPATH` | `/app` | Gwarantuje widoczność modułu `src` oraz poprawne działanie `python -m src....` |
+| `DATA_DIR` | `/app/src/data` | Ścieżka do surowych danych XAU/USD montowanych w kontenerze |
+
+Plik `.env.example` został zaktualizowany, więc wystarczy ponownie skopiować go do `.env` aby mieć prawidłowe ustawienia.
+
 ### 1. Przygotowanie
 
 ```bash
@@ -91,6 +102,7 @@ docker-compose exec jupyter bash
 
 ```bash
 docker-compose run ml-training pytest tests/
+docker-compose run ml-training pytest tests/test_training_pipeline.py
 docker-compose run ml-training pytest tests/ -vv
 ```
 

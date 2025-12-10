@@ -1,6 +1,6 @@
 # Multi-stage build for ML pipeline
 # Stage 1: Base Python environment with dependencies
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 # Set working directory
 WORKDIR /app
@@ -16,7 +16,6 @@ RUN apt-get update && apt-get install -y \
     gfortran \
     libopenblas-dev \
     liblapack-dev \
-    libatlas-base-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
@@ -29,7 +28,7 @@ ENV PYTHONUNBUFFERED=1 \
 RUN pip install --upgrade pip setuptools wheel
 
 # Stage 2: Install ML dependencies
-FROM base as builder
+FROM base AS builder
 
 WORKDIR /app
 
@@ -40,7 +39,7 @@ COPY ml/requirements_ml.txt .
 RUN pip install --user --no-warn-script-location -r requirements_ml.txt
 
 # Stage 3: Runtime environment
-FROM base as runtime
+FROM base AS runtime
 
 WORKDIR /app
 
@@ -48,8 +47,7 @@ WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 
 # Set PATH to include user site-packages
-ENV PATH=/root/.local/bin:$PATH \
-    PYTHONPATH=/app:$PYTHONPATH
+ENV PATH=/root/.local/bin:$PATH
 
 # Copy ML project files
 COPY ml/src ./src

@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ML Training Service
   ml-training:
@@ -17,6 +15,9 @@ services:
       - ./ml/notebooks:/app/notebooks
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATA_DIR=${DATA_DIR:-/app/src/data}
     command: python -m src.pipelines.training_pipeline
     restart: unless-stopped
 
@@ -34,6 +35,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - JUPYTER_ENABLE_LAB=yes
+      - PYTHONPATH=/app
+      - DATA_DIR=${DATA_DIR:-/app/src/data}
     ports:
       - "8888:8888"
     command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
