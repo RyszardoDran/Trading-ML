@@ -65,7 +65,11 @@ def engineer_minimal_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    repo_root = Path(__file__).parents[2]
+    # `predict_latest.py` lives in `ml/src/scripts` so the package root
+    # containing `models/` and `data/` is two levels up from this file's
+    # directory (i.e. `ml/src`). Use `parents[1]` so paths point to
+    # `ml/src/models` and `ml/src/data` which exist in the repo layout.
+    repo_root = Path(__file__).parents[1]
     models_dir = repo_root / "models"
     data_dir = repo_root / "data"
 
