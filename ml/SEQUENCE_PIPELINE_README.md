@@ -112,6 +112,21 @@ python sequence_training_pipeline.py \
 - `--custom-end-hour`: End hour (0-23) for `custom` session.
 - `--max-windows`: Maximum number of windows to keep to avoid OOM (default: 200,000).
 
+### Per-day Trade Cap
+
+Limit the number of trades per calendar day by keeping only the top-N predictions (by probability) each day after thresholding. This helps control trade frequency while preserving precision.
+
+Example: cap at 2 trades/day
+```bash
+python sequence_training_pipeline.py --session custom --custom-start-hour 10 --custom-end-hour 12 \
+    --years 2023 --window-size 100 --min-precision 0.65 --max-trades-per-day 2
+```
+
+Notes:
+- The cap applies during threshold selection and final evaluation.
+- Within each day, predictions are ranked by probability and only the top `N` are kept.
+- Set `--max-trades-per-day` to omit or leave empty for unlimited trades per day.
+
 ### Session Filtering
 
 You can filter training data to specific trading sessions to specialize the model for certain market conditions.

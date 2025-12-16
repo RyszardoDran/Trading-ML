@@ -18,10 +18,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.preprocessing import RobustScaler
 
 # Import functions from sequence pipeline
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "pipelines"))
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "scripts"))
 
 from sequence_training_pipeline import (
     _validate_schema,
@@ -34,6 +37,8 @@ from sequence_training_pipeline import (
     save_artifacts,
     filter_by_session,
 )
+
+import predict_sequence as predict_sequence_module
 
 
 @pytest.fixture
@@ -142,6 +147,32 @@ class TestTargetCreation:
         
         with pytest.raises(ValueError, match="ATR multipliers must be positive"):
             make_target(sample_ohlcv_data, atr_multiplier_sl=-1.0)
+
+    def test_target_marks_tp_hits(self):
+        """TP hit before SL must produce label 1 for the entry candle."""
+        index = pd.date_range("2024-01-01 00:00", periods=6, freq="min")
+        close = np.array([102.0, 104.5, 103.5, 104.0, 104.2, 104.5], dtype=np.float32)
+        data = pd.DataFrame(
+            {
+                "Open": close - 1.0,
+                "High": close + 3.0,
+                "Low": close - 0.25,
+                "Close": close,
+                "Volume": np.full_like(close, 1_000.0),
+                "ATR_M5": np.full_like(close, 1.0),
+            },
+            index=index,
+        )
+
+        target = make_target(
+            data,
+            atr_multiplier_sl=1.0,
+            atr_multiplier_tp=2.0,
+            min_hold_minutes=1,
+            max_horizon=3,
+        )
+
+        assert target.loc[index[0]] == 1
 
 
 class TestSequenceCreation:
@@ -491,6 +522,82 @@ class TestSessionFiltering:
 
         with pytest.raises(ValueError, match="Must provide custom_start"):
             filter_by_session(X, y, dates, "custom")
+
+
+class TestPredictSequence:
+    """Tests for the prediction script pipeline."""
+
+    class _DummyModel:
+        def __init__(self, proba: float) -> None:
+            self._proba = proba
+            self.last_input: np.ndarray | None = None
+
+        def predict_proba(self, X: np.ndarray) -> np.ndarray:
+            self.last_input = X.copy()
+            return np.array([[1.0 - self._proba, self._proba]], dtype=np.float32)
+
+    def test_predict_applies_saved_scaler(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Predict must apply the persisted scaler before inference."""
+        window_size = 2
+        feature_columns = ["feat1", "feat2"]
+        feature_index = pd.date_range("2024-02-01 09:00", periods=window_size, freq="min")
+        feature_df = pd.DataFrame(
+            {
+                "feat1": [10.0, 11.0],
+                "feat2": [20.0, 22.0],
+            },
+            index=feature_index,
+        )
+
+        scaler = RobustScaler()
+        scaler.fit(np.array([[0.0, 0.0, 0.0, 0.0], [5.0, 5.0, 5.0, 5.0]], dtype=np.float32))
+
+        model = self._DummyModel(proba=0.6)
+
+        def fake_engineer_candle_features(_: pd.DataFrame, window_size: int = 100) -> pd.DataFrame:
+            assert window_size == 2
+            return feature_df
+
+        def fake_load_model_artifacts(_: Path) -> dict[str, object]:
+            return {
+                "model": model,
+                "feature_columns": feature_columns,
+                "threshold": 0.5,
+                "win_rate": 0.7,
+                "window_size": window_size,
+                "scaler": scaler,
+            }
+
+        candles = pd.DataFrame(
+            {
+                "Open": [101.0, 102.0],
+                "High": [103.0, 104.0],
+                "Low": [100.0, 101.0],
+                "Close": [102.0, 103.0],
+                "Volume": [1_000.0, 1_100.0],
+            },
+            index=feature_index,
+        )
+
+        monkeypatch.setattr(
+            predict_sequence_module,
+            "engineer_candle_features",
+            fake_engineer_candle_features,
+        )
+        monkeypatch.setattr(
+            predict_sequence_module,
+            "load_model_artifacts",
+            fake_load_model_artifacts,
+        )
+
+        result = predict_sequence_module.predict(candles, Path("unused"))
+
+        raw = feature_df.values.flatten().reshape(1, -1)
+        expected = scaler.transform(raw).astype(np.float32)
+
+        assert model.last_input is not None
+        assert np.allclose(model.last_input, expected)
+        assert result["probability"] == pytest.approx(0.6)
 
 
 if __name__ == "__main__":

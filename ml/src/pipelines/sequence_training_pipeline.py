@@ -3,7 +3,7 @@ from __future__ import annotations
 
 Purpose:
 - Load historical 1m OHLCV data from `ml/src/data/`
-- Create sliding windows of 100 candles as input features
+- Create sliding windows of 60 candles (configurable) as input features
 - Engineer features for each candle in the sequence (flatten to XGBoost input)
 - Train XGBoost classifier with calibrated probability estimates
 - Validate win rate on test set with realistic thresholds
@@ -40,8 +40,9 @@ Usage:
 
 import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -59,6 +60,31 @@ from xgboost import XGBClassifier
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+@dataclass(frozen=True)
+class SequenceFilterConfig:
+    """Configuration for session-level sequence filters.
+
+    Attributes:
+        enable_m5_alignment: If True, keep only windows that close one minute before
+            a new M5 candle to synchronize decisions with bar openings.
+        enable_trend_filter: If True, require price to be above a long-term trend
+            proxy and volatility regime to exceed a minimum threshold.
+        trend_min_dist_sma200: Minimum normalized distance above SMA200 accepted when
+            trend filter is enabled.
+        trend_min_adx: Minimum ADX value required when trend filter is enabled.
+        enable_pullback_filter: If True, constrain RSI-based pullback conditions.
+        pullback_max_rsi_m5: Maximum allowed RSI_M5 reading when pullback filter is
+            enabled.
+    """
+
+    enable_m5_alignment: bool = True
+    enable_trend_filter: bool = True
+    trend_min_dist_sma200: Optional[float] = 0.0
+    trend_min_adx: Optional[float] = 15.0
+    enable_pullback_filter: bool = True
+    pullback_max_rsi_m5: Optional[float] = 75.0
 
 
 def _validate_schema(df: pd.DataFrame) -> None:
@@ -664,6 +690,7 @@ def create_sequences(
     session: str = "all",
     custom_start: int = None,
     custom_end: int = None,
+    filter_config: Optional[SequenceFilterConfig] = None,
     max_windows: int = 200000,
 ) -> Tuple[np.ndarray, np.ndarray, pd.DatetimeIndex]:
     """Create sliding windows of features with corresponding targets.
@@ -681,6 +708,8 @@ def create_sequences(
         session: Session filter ('london', 'ny', 'asian', 'london_ny', 'all', 'custom')
         custom_start: Start hour for custom session
         custom_end: End hour for custom session
+        filter_config: Optional configuration controlling alignment and feature-based
+            trade filters. When None, defaults replicate legacy behaviour.
         max_windows: Maximum number of windows to create
 
     Returns:
@@ -701,6 +730,7 @@ def create_sequences(
     if len(features) < window_size:
         raise ValueError(f"Need at least {window_size} samples, got {len(features)}")
 
+    config = filter_config or SequenceFilterConfig()
     n_features = features.shape[1]
     n_windows = len(features) - window_size + 1
 
@@ -746,41 +776,92 @@ def create_sequences(
     # The decision is made after the CLOSE of the previous M5 candle.
     # M5 candle 10:00 covers 10:00-10:04. It closes at 10:05:00.
     # So we need the window to end at minute 4, 9, 14, etc.
-    minutes = timestamps.minute
-    m5_mask = ((minutes + 1) % 5 == 0)
-    mask = mask & m5_mask
-    logger.info(f"Applied M5 alignment filter (keeping only candles ending at 4, 9, 14... to trade at 0, 5, 10...)")
+    if config.enable_m5_alignment:
+        minutes = timestamps.minute
+        m5_mask = ((minutes + 1) % 5 == 0)
+        mask = mask & m5_mask
+        logger.info("Applied M5 alignment filter (keeping only candles ending at 4, 9, 14... to trade at 0, 5, 10...)")
+    else:
+        logger.info("M5 alignment filter disabled; keeping all timestamps irrespective of minute alignment")
     # ------------------------
 
     # --- TREND FILTER (Long Only) ---
     # Only take trades where Price > SMA 200 (Uptrend) AND ADX > 15 (Trend exists)
     # We use 'dist_sma_200' > 0 and 'adx' > 15
-    if "dist_sma_200" in features.columns and "adx" in features.columns:
-        # Get column indices
-        sma_idx = features.columns.get_loc("dist_sma_200")
-        adx_idx = features.columns.get_loc("adx")
-        
-        # Get values for window ends
-        dist_sma_values = features_array[timestamp_indices, sma_idx]
-        adx_values = features_array[timestamp_indices, adx_idx]
-        
-        # Apply combined filter
-        trend_mask = (dist_sma_values > 0) & (adx_values > 15)
-        mask = mask & trend_mask
-        logger.info(f"Applied Trend Filter (Close > SMA200 AND ADX > 15): kept {trend_mask.sum()}/{len(trend_mask)} ({trend_mask.mean():.1%})")
+    if config.enable_trend_filter:
+        if "dist_sma_200" in features.columns and "adx" in features.columns:
+            sma_idx = features.columns.get_loc("dist_sma_200")
+            adx_idx = features.columns.get_loc("adx")
+
+            dist_sma_values = features_array[timestamp_indices, sma_idx]
+            adx_values = features_array[timestamp_indices, adx_idx]
+
+            trend_mask = np.ones(len(timestamps), dtype=bool)
+            if config.trend_min_dist_sma200 is not None:
+                trend_mask &= dist_sma_values > config.trend_min_dist_sma200
+            if config.trend_min_adx is not None:
+                trend_mask &= adx_values > config.trend_min_adx
+
+            mask = mask & trend_mask
+            kept = int(trend_mask.sum())
+            total = len(trend_mask)
+            ratio = kept / total if total else 0.0
+            logger.info(
+                "Applied Trend Filter (dist_sma_200 > %s, ADX > %s): kept %s/%s (%.1f%%)"
+                % (
+                    (
+                        f"{config.trend_min_dist_sma200:.2f}"
+                        if config.trend_min_dist_sma200 is not None
+                        else "disabled"
+                    ),
+                    (
+                        f"{config.trend_min_adx:.2f}"
+                        if config.trend_min_adx is not None
+                        else "disabled"
+                    ),
+                    kept,
+                    total,
+                    ratio * 100,
+                )
+            )
+        else:
+            logger.warning("dist_sma_200 or adx feature not found; skipping trend filter")
     else:
-        logger.warning("dist_sma_200 or adx feature not found! Skipping Trend Filter.")
+        logger.info("Trend filter disabled; not enforcing SMA/ADX conditions")
     
     # --- PULLBACK FILTER ---
     # Avoid buying tops. Only buy if RSI_M5 is not overbought (< 75).
     # Ideally we want RSI < 60 for a pullback, but let's start with < 75 to avoid cutting too much.
-    if "rsi_m5" in features.columns:
-        rsi_idx = features.columns.get_loc("rsi_m5")
-        rsi_values = features_array[timestamp_indices, rsi_idx]
-        
-        pullback_mask = rsi_values < 75
-        mask = mask & pullback_mask
-        logger.info(f"Applied Pullback Filter (RSI_M5 < 75): kept {pullback_mask.sum()}/{len(pullback_mask)} ({pullback_mask.mean():.1%})")
+    if config.enable_pullback_filter:
+        if "rsi_m5" in features.columns:
+            rsi_idx = features.columns.get_loc("rsi_m5")
+            rsi_values = features_array[timestamp_indices, rsi_idx]
+
+            pullback_mask = np.ones(len(timestamps), dtype=bool)
+            if config.pullback_max_rsi_m5 is not None:
+                pullback_mask &= rsi_values < config.pullback_max_rsi_m5
+
+            mask = mask & pullback_mask
+            kept = int(pullback_mask.sum())
+            total = len(pullback_mask)
+            ratio = kept / total if total else 0.0
+            logger.info(
+                "Applied Pullback Filter (RSI_M5 < %s): kept %s/%s (%.1f%%)"
+                % (
+                    (
+                        f"{config.pullback_max_rsi_m5:.2f}"
+                        if config.pullback_max_rsi_m5 is not None
+                        else "disabled"
+                    ),
+                    kept,
+                    total,
+                    ratio * 100,
+                )
+            )
+        else:
+            logger.warning("rsi_m5 feature not found; skipping pullback filter")
+    else:
+        logger.info("Pullback filter disabled; not constraining RSI_M5")
     # --------------------------------
 
     if mask.sum() == 0:
@@ -967,7 +1048,7 @@ def make_target(
     
     # Initialize target array
     target = np.zeros(n_samples, dtype=np.float32)
-    target[:valid_samples][tp_wins] = 1.0
+    target[:valid_samples] = tp_wins.astype(np.float32)
     
     # Set invalid/future targets to NaN
     target[valid_samples:] = np.nan
@@ -990,7 +1071,17 @@ def split_sequences(
     train_until: str = "2022-12-31 23:59:00",
     val_until: str = "2023-12-31 23:59:00",
     test_until: str = "2024-12-31 23:59:00",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    pd.DatetimeIndex,
+    pd.DatetimeIndex,
+    pd.DatetimeIndex,
+]:
     """Chronological split of sequence data.
 
     Args:
@@ -1022,7 +1113,7 @@ def split_sequences(
     if min(map(len, [X_train, X_val, X_test])) == 0:
         raise ValueError("One of the splits is empty; verify data coverage for train/val/test ranges")
 
-    return X_train, X_val, X_test, y_train, y_val, y_test
+    return X_train, X_val, X_test, y_train, y_val, y_test, timestamps[train_mask], timestamps[val_mask], timestamps[test_mask]
 
 
 def train_xgb(
@@ -1095,63 +1186,125 @@ def train_xgb(
     return calibrated
 
 
-def _pick_best_threshold(y_true: np.ndarray, proba: np.ndarray) -> float:
-    """Sweep thresholds and return the one maximizing Recall while keeping Precision >= 0.40.
+def _apply_daily_cap(
+    proba: np.ndarray,
+    preds: np.ndarray,
+    timestamps: pd.DatetimeIndex | None,
+    max_trades_per_day: int | None,
+) -> np.ndarray:
+    """Apply per-day cap on number of positive predictions.
+
+    Keeps the highest-probability signals per day up to max_trades_per_day.
+    If timestamps or cap are None, returns preds unchanged.
+    """
+    if max_trades_per_day is None or max_trades_per_day <= 0 or timestamps is None:
+        return preds
+
+    preds = preds.copy()
+    # Group by date
+    dates = pd.DatetimeIndex(timestamps).date
+    unique_days = np.unique(dates)
+    for d in unique_days:
+        day_idx = np.where(dates == d)[0]
+        day_pos_idx = day_idx[preds[day_idx] == 1]
+        if len(day_pos_idx) > max_trades_per_day:
+            # Keep top-k by probability
+            top_order = np.argsort(proba[day_pos_idx])[::-1][:max_trades_per_day]
+            keep_idx = set(day_pos_idx[top_order])
+            # Zero out the rest
+            for i in day_pos_idx:
+                if i not in keep_idx:
+                    preds[i] = 0
+    return preds
+
+
+def _pick_best_threshold(
+    y_true: np.ndarray,
+    proba: np.ndarray,
+    min_precision: float = 0.85,
+    min_trades: int | None = None,
+    timestamps: pd.DatetimeIndex | None = None,
+    max_trades_per_day: int | None = None,
+) -> float:
+    """Select threshold maximizing F1 under a precision floor and trade count.
+
+    Strategy:
+    - Enforce precision (win rate) >= min_precision to preserve quality.
+    - Require a minimum number of predicted positives (min_trades) for stability.
+    - Among feasible thresholds, maximize F1 (balances precision and recall).
 
     Args:
         y_true: True binary labels
-        proba: Predicted probabilities
+        proba: Predicted probabilities for the positive class
+        min_precision: Minimum acceptable precision (win rate)
+        min_trades: Minimum number of predicted positives; if None, uses
+            max(25, ceil(0.002 * len(y_true))).
 
     Returns:
-        Optimal threshold
+        Threshold value as float.
     """
-    # Start from 0.30 (approx breakeven for 1:2 RR)
-    thresholds = np.linspace(0.30, 0.95, 66) 
+    thresholds = np.linspace(0.20, 0.95, 151)
+    if min_trades is None:
+        min_trades = max(25, int(np.ceil(0.002 * len(y_true))))
+
     best_thr = 0.5
-    best_recall = -1.0
+    best_f1 = -1.0
+    best_rec = -1.0
     found_valid = False
-    
-    # Fallback: threshold that gives at least some trades
-    
+
     for t in thresholds:
         preds = (proba >= t).astype(int)
-        n_trades = preds.sum()
-        
-        if n_trades < 10: # Require at least 10 trades to be statistically significant
+        preds = _apply_daily_cap(proba, preds, timestamps, max_trades_per_day)
+        n_trades = int(preds.sum())
+        if n_trades < min_trades:
             continue
-            
-        precision = precision_score(y_true, preds, zero_division=0)
-        recall = recall_score(y_true, preds, zero_division=0)
-        
-        # STRATEGY: High Precision Target
-        # We want to maximize Recall (frequency), but ONLY if Precision is >= 70%.
-        # This maintains a very high win rate (safe) while trying to find more trades
-        # than the extreme 85% model.
-        if precision >= 0.70:
+
+        prec = precision_score(y_true, preds, zero_division=0)
+        if prec < min_precision:
+            continue
+        rec = recall_score(y_true, preds, zero_division=0)
+        f1 = f1_score(y_true, preds, zero_division=0)
+
+        # Prefer higher F1; tie-break by higher recall then lower threshold
+        if (f1 > best_f1) or (np.isclose(f1, best_f1) and rec > best_rec) or (
+            np.isclose(f1, best_f1) and np.isclose(rec, best_rec) and t < best_thr
+        ):
+            best_f1 = f1
+            best_rec = rec
+            best_thr = float(t)
             found_valid = True
-            if recall > best_recall:
-                best_recall = recall
-                best_thr = t
-            
-    # If no threshold met >70% precision criteria, fallback to maximizing Precision
+
     if not found_valid:
-        logger.warning("No threshold met >70% precision. Fallback to max precision.")
-        best_precision = -1.0
+        logger.warning(
+            f"No threshold met precision >= {min_precision:.2f} with >= {min_trades} trades. "
+            "Falling back to maximizing precision with stability constraint."
+        )
+        best_prec = -1.0
+        best_rec = -1.0
         for t in thresholds:
             preds = (proba >= t).astype(int)
-            if preds.sum() < 5: continue
+            preds = _apply_daily_cap(proba, preds, timestamps, max_trades_per_day)
+            n_trades = int(preds.sum())
+            if n_trades < min_trades:
+                continue
             prec = precision_score(y_true, preds, zero_division=0)
-            if prec > best_precision:
-                best_precision = prec
-                best_thr = t
-        
-    return float(best_thr)
+            rec = recall_score(y_true, preds, zero_division=0)
+            if (prec > best_prec) or (np.isclose(prec, best_prec) and rec > best_rec):
+                best_prec = prec
+                best_rec = rec
+                best_thr = float(t)
+
+    return best_thr
 
 
 def evaluate(
     model: CalibratedClassifierCV,
     X_test: np.ndarray,
     y_test: np.ndarray,
+    min_precision: float = 0.85,
+    min_trades: int | None = None,
+    test_timestamps: pd.DatetimeIndex | None = None,
+    max_trades_per_day: int | None = None,
 ) -> Dict[str, float]:
     """Evaluate model with comprehensive metrics including win rate.
 
@@ -1187,8 +1340,19 @@ def evaluate(
         logger.warning(f"⚠️  Model has very low discriminative power (ROC-AUC={roc:.4f}). Results may be random.")
     
     pr_auc = average_precision_score(y_test, proba)
-    thr = _pick_best_threshold(y_test, proba)
+    # Target a high win rate floor while improving recall; enforce stability in trade count
+    if min_trades is None:
+        min_trades = max(25, int(np.ceil(0.002 * len(y_test))))
+    thr = _pick_best_threshold(
+        y_test,
+        proba,
+        min_precision=min_precision,
+        min_trades=min_trades,
+        timestamps=test_timestamps,
+        max_trades_per_day=max_trades_per_day,
+    )
     preds = (proba >= thr).astype(int)
+    preds = _apply_daily_cap(proba, preds, test_timestamps, max_trades_per_day)
     
     cm = confusion_matrix(y_test, preds)
     logger.info(f"Confusion matrix@thr={thr:.2f}:")
@@ -1387,6 +1551,15 @@ def run_pipeline(
     custom_start_hour: int = None,
     custom_end_hour: int = None,
     max_windows: int = 200000,
+    min_precision: float = 0.85,
+    min_trades: int | None = None,
+    max_trades_per_day: int | None = None,
+    enable_m5_alignment: bool = True,
+    enable_trend_filter: bool = True,
+    trend_min_dist_sma200: float | None = 0.0,
+    trend_min_adx: float | None = 15.0,
+    enable_pullback_filter: bool = True,
+    pullback_max_rsi_m5: float | None = 75.0,
 ) -> Dict[str, float]:
     """Execute end-to-end sequence training pipeline.
 
@@ -1399,6 +1572,15 @@ def run_pipeline(
         random_state: Random seed for reproducibility
         year_filter: Optional list of years to load (e.g., [2023, 2024] for testing)
         max_windows: Maximum number of windows to keep (default: 200,000)
+        enable_m5_alignment: Align decisions with M5 candle closes when True
+        enable_trend_filter: Enforce SMA/ADX trend conditions when True
+        trend_min_dist_sma200: Minimum normalized distance above SMA200 when trend
+            filter is active; set to None to disable this component
+        trend_min_adx: Minimum ADX threshold when trend filter is active; set to
+            None to disable this component
+        enable_pullback_filter: Enforce RSI_M5 pullback guard when True
+        pullback_max_rsi_m5: Maximum RSI_M5 allowed when pullback filter is active;
+            set to None to disable the RSI cap
 
     Returns:
         Dictionary with evaluation metrics including win_rate
@@ -1434,6 +1616,25 @@ def run_pipeline(
     logger.info(f"Creating sequences (window_size={window_size})...")
     if window_size < 1:
         raise ValueError(f"window_size must be >= 1, got {window_size}")
+    filter_config = SequenceFilterConfig(
+        enable_m5_alignment=enable_m5_alignment,
+        enable_trend_filter=enable_trend_filter,
+        trend_min_dist_sma200=trend_min_dist_sma200,
+        trend_min_adx=trend_min_adx,
+        enable_pullback_filter=enable_pullback_filter,
+        pullback_max_rsi_m5=pullback_max_rsi_m5,
+    )
+    logger.info(
+        "Filter configuration: m5=%s, trend=%s(dist_sma200=%s, adx=%s), pullback=%s(rsi<=%s)"
+        % (
+            enable_m5_alignment,
+            enable_trend_filter,
+            trend_min_dist_sma200 if trend_min_dist_sma200 is not None else "disabled",
+            trend_min_adx if trend_min_adx is not None else "disabled",
+            enable_pullback_filter,
+            pullback_max_rsi_m5 if pullback_max_rsi_m5 is not None else "disabled",
+        )
+    )
     X, y, timestamps = create_sequences(
         features,
         targets,
@@ -1441,6 +1642,7 @@ def run_pipeline(
         session=session,
         custom_start=custom_start_hour,
         custom_end=custom_end_hour,
+        filter_config=filter_config,
         max_windows=max_windows,
     )
     logger.info(f"Sequences: X.shape={X.shape}, y.shape={y.shape}")
@@ -1455,10 +1657,25 @@ def run_pipeline(
         X_train, y_train = X[:train_idx], y[:train_idx]
         X_val, y_val = X[train_idx:val_idx], y[train_idx:val_idx]
         X_test, y_test = X[val_idx:], y[val_idx:]
+        ts_train, ts_val, ts_test = (
+            timestamps[:train_idx],
+            timestamps[train_idx:val_idx],
+            timestamps[val_idx:],
+        )
         logger.info(f"Using percentage split (70/15/15) for year_filter={year_filter}")
     else:
         # Full date range: use fixed date splits
-        X_train, X_val, X_test, y_train, y_val, y_test = split_sequences(X, y, timestamps)
+        (
+            X_train,
+            X_val,
+            X_test,
+            y_train,
+            y_val,
+            y_test,
+            ts_train,
+            ts_val,
+            ts_test,
+        ) = split_sequences(X, y, timestamps)
     logger.info(f"Split sizes: train={len(X_train)}, val={len(X_val)}, test={len(X_test)}")
 
     # CRITICAL: Scale features AFTER split to prevent data leakage
@@ -1475,7 +1692,15 @@ def run_pipeline(
     model = train_xgb(X_train_scaled, y_train, X_val_scaled, y_val, random_state=random_state)
 
     logger.info("Evaluating model on test set...")
-    metrics = evaluate(model, X_test_scaled, y_test)
+    metrics = evaluate(
+        model,
+        X_test_scaled,
+        y_test,
+        min_precision=min_precision,
+        min_trades=min_trades,
+        test_timestamps=ts_test,
+        max_trades_per_day=max_trades_per_day,
+    )
     logger.info(
         "Metrics: "
         f"threshold={metrics['threshold']:.2f}, "
@@ -1509,8 +1734,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--window-size",
         type=int,
-        default=14,
-        help="Number of previous candles to use as input (default: 14)",
+        default=60,
+        help="Number of previous candles to use as input (default: 60)",
     )
     parser.add_argument(
         "--atr-multiplier-sl",
@@ -1573,6 +1798,57 @@ if __name__ == "__main__":
         default=200000,
         help="Maximum number of windows to keep to avoid OOM (default: 200,000)",
     )
+    parser.add_argument(
+        "--min-precision",
+        type=float,
+        default=0.85,
+        help="Minimum precision (win rate) floor for threshold selection (default: 0.85)",
+    )
+    parser.add_argument(
+        "--min-trades",
+        type=int,
+        default=None,
+        help="Minimum number of predicted positives for a threshold to be considered (default: dynamic)",
+    )
+    parser.add_argument(
+        "--max-trades-per-day",
+        type=int,
+        default=None,
+        help="Cap number of predicted trades per day after thresholding (default: unlimited)",
+    )
+    parser.add_argument(
+        "--skip-m5-alignment",
+        action="store_true",
+        help="Disable M5 alignment filter (default: enabled)",
+    )
+    parser.add_argument(
+        "--disable-trend-filter",
+        action="store_true",
+        help="Disable trend filter requiring price above SMA200 and ADX threshold",
+    )
+    parser.add_argument(
+        "--trend-min-dist-sma200",
+        type=float,
+        default=0.0,
+        help="Minimum normalized distance above SMA200 when trend filter enabled (default: 0.0)",
+    )
+    parser.add_argument(
+        "--trend-min-adx",
+        type=float,
+        default=15.0,
+        help="Minimum ADX when trend filter enabled (default: 15.0)",
+    )
+    parser.add_argument(
+        "--disable-pullback-filter",
+        action="store_true",
+        help="Disable RSI_M5 pullback guard",
+    )
+    parser.add_argument(
+        "--pullback-max-rsi-m5",
+        type=float,
+        default=75.0,
+        help="Maximum RSI_M5 when pullback filter enabled (default: 75.0)",
+    )
     args = parser.parse_args()
 
     # Parse year filter
@@ -1593,6 +1869,15 @@ if __name__ == "__main__":
             custom_start_hour=args.custom_start_hour,
             custom_end_hour=args.custom_end_hour,
             max_windows=args.max_windows,
+            min_precision=args.min_precision,
+            min_trades=args.min_trades,
+            max_trades_per_day=args.max_trades_per_day,
+            enable_m5_alignment=not args.skip_m5_alignment,
+            enable_trend_filter=not args.disable_trend_filter,
+            trend_min_dist_sma200=None if args.disable_trend_filter else args.trend_min_dist_sma200,
+            trend_min_adx=None if args.disable_trend_filter else args.trend_min_adx,
+            enable_pullback_filter=not args.disable_pullback_filter,
+            pullback_max_rsi_m5=None if args.disable_pullback_filter else args.pullback_max_rsi_m5,
         )
 
         print("\n" + "=" * 60)

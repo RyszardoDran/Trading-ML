@@ -27,11 +27,12 @@ Output:
 import json
 import logging
 import pickle
+import sys
 from pathlib import Path
 from typing import Dict, Optional
 
-import sys
-from pathlib import Path
+import numpy as np
+import pandas as pd
 
 # Add src to path to allow imports
 sys.path.append(str(Path(__file__).parent.parent))
@@ -43,13 +44,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 
 def load_model_artifacts(models_dir: Path) -> Dict:
-    """Load trained model and metadata.
+    """Load trained model, scaler, and metadata.
 
     Args:
         models_dir: Directory containing model artifacts
 
     Returns:
-        Dictionary with model, feature_columns, threshold, win_rate, window_size
+        Dictionary with model, feature_columns, threshold, win_rate, window_size, scaler
 
     Raises:
         FileNotFoundError: If artifacts are missing
@@ -57,6 +58,7 @@ def load_model_artifacts(models_dir: Path) -> Dict:
     model_path = models_dir / "sequence_xgb_model.pkl"
     features_path = models_dir / "sequence_feature_columns.json"
     metadata_path = models_dir / "sequence_threshold.json"
+    scaler_path = models_dir / "sequence_scaler.pkl"
 
     if not model_path.exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
@@ -64,6 +66,8 @@ def load_model_artifacts(models_dir: Path) -> Dict:
         raise FileNotFoundError(f"Feature columns not found: {features_path}")
     if not metadata_path.exists():
         raise FileNotFoundError(f"Metadata not found: {metadata_path}")
+    if not scaler_path.exists():
+        raise FileNotFoundError(f"Scaler not found: {scaler_path}")
 
     with open(model_path, "rb") as f:
         model = pickle.load(f)
@@ -74,12 +78,16 @@ def load_model_artifacts(models_dir: Path) -> Dict:
     with open(metadata_path, "r", encoding="utf-8") as f:
         metadata = json.load(f)
 
+    with open(scaler_path, "rb") as f:
+        scaler = pickle.load(f)
+
     return {
         "model": model,
         "feature_columns": feature_columns,
         "threshold": metadata["threshold"],
         "win_rate": metadata["win_rate"],
         "window_size": metadata["window_size"],
+        "scaler": scaler,
     }
 
 
@@ -145,13 +153,17 @@ def predict(
     threshold = artifacts["threshold"]
     win_rate = artifacts["win_rate"]
     window_size = artifacts["window_size"]
+    scaler = artifacts.get("scaler")
+
+    if scaler is None:
+        raise ValueError("Scaler artifact missing; retrain pipeline to regenerate artifacts")
 
     # Validate input
     validate_input_candles(candles, window_size)
 
     # Engineer features
     logger.info("Engineering features...")
-    features = engineer_candle_features(candles)
+    features = engineer_candle_features(candles, window_size=window_size)
     
     if len(features) != window_size:
         raise ValueError(f"Feature engineering produced {len(features)} rows, expected {window_size}")
@@ -203,7 +215,9 @@ def predict(
     # --------------------------
 
     # Flatten to model input format
-    X = features.values.flatten().reshape(1, -1).astype(np.float32)
+    X_raw = features.values.flatten().reshape(1, -1)
+    X_scaled = scaler.transform(X_raw)
+    X = X_scaled.astype(np.float32)
 
     # Predict
     logger.info("Running prediction...")
