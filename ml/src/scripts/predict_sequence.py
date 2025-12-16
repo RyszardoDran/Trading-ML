@@ -30,8 +30,13 @@ import pickle
 from pathlib import Path
 from typing import Dict, Optional
 
-import numpy as np
-import pandas as pd
+import sys
+from pathlib import Path
+
+# Add src to path to allow imports
+sys.path.append(str(Path(__file__).parent.parent))
+
+from pipelines.sequence_training_pipeline import engineer_candle_features
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -109,107 +114,6 @@ def validate_input_candles(df: pd.DataFrame, required_size: int) -> None:
         raise ValueError("Price inconsistency: High < Low detected")
 
 
-def engineer_candle_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Engineer per-candle features matching training pipeline.
-
-    This MUST match the feature engineering in sequence_training_pipeline.py
-
-    Args:
-        df: OHLCV DataFrame with datetime index
-
-    Returns:
-        DataFrame with per-candle features
-
-    Raises:
-        ValueError: If feature engineering fails
-    """
-    df = df.copy()
-    close = df["Close"].astype(float).clip(lower=1e-9)
-    open_ = df["Open"].astype(float).clip(lower=1e-9)
-    high = df["High"].astype(float).clip(lower=1e-9)
-    low = df["Low"].astype(float).clip(lower=1e-9)
-    volume = df["Volume"].astype(float).clip(lower=1e-9)
-
-    # Log returns
-    logc = np.log(close)
-    ret1 = logc.diff(1)
-
-    # Candle structure
-    range_ = high - low
-    range_safe = range_.replace(0, np.nan)
-    
-    range_n = range_ / close
-    body_ratio = np.abs(close - open_) / (range_safe + 1e-9)
-    upper_shadow = (high - np.maximum(open_, close)) / (range_safe + 1e-9)
-    lower_shadow = (np.minimum(open_, close) - low) / (range_safe + 1e-9)
-
-    # Volume features
-    vol_change = np.log(volume / volume.shift(1).replace(0, np.nan))
-
-    # Rolling features
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
-    ema_spread_n = (ema12 - ema26) / close
-
-    # Simplified RSI(14)
-    delta = close.diff()
-    gain = delta.clip(lower=0).rolling(14, min_periods=1).mean()
-    loss = (-delta.clip(upper=0)).rolling(14, min_periods=1).mean()
-    rs = gain / (loss.replace(0, np.nan))
-    rsi14 = 100 - (100 / (1 + rs))
-
-    # Volatility
-    vol20 = ret1.rolling(20, min_periods=1).std()
-    
-    # ATR (Average True Range)
-    tr1 = high - low
-    tr2 = np.abs(high - close.shift(1))
-    tr3 = np.abs(low - close.shift(1))
-    true_range = np.maximum(tr1, np.maximum(tr2, tr3))
-    atr_14 = true_range.rolling(14, min_periods=1).mean()
-    atr_n = atr_14 / close  # Normalized ATR
-
-    # Time features
-    hour = df.index.hour
-    minute = df.index.minute
-    
-    hour_sin = np.sin(2 * np.pi * hour / 24)
-    hour_cos = np.cos(2 * np.pi * hour / 24)
-    minute_sin = np.sin(2 * np.pi * minute / 60)
-    minute_cos = np.cos(2 * np.pi * minute / 60)
-
-    features = pd.DataFrame(
-        {
-            "ret_1": ret1,
-            "range_n": range_n,
-            "body_ratio": body_ratio,
-            "upper_shadow": upper_shadow,
-            "lower_shadow": lower_shadow,
-            "vol_change": vol_change,
-            "ema_spread_n": ema_spread_n,
-            "rsi_14": rsi14,
-            "vol_20": vol20,
-            "atr_14": atr_14,
-            "atr_n": atr_n,
-            "hour_sin": hour_sin,
-            "hour_cos": hour_cos,
-            "minute_sin": minute_sin,
-            "minute_cos": minute_cos,
-        },
-        index=df.index,
-    )
-
-    features.replace([np.inf, -np.inf], np.nan, inplace=True)
-    
-    # Fill NaN with forward fill for prediction (no future data)
-    features = features.ffill().fillna(0)
-    
-    if features.empty:
-        raise ValueError("Feature matrix is empty after engineering")
-    
-    return features
-
-
 def predict(
     candles: pd.DataFrame,
     models_dir: Path,
@@ -259,6 +163,44 @@ def predict(
             features = features[feature_columns]
         except KeyError as e:
             raise ValueError(f"Feature mismatch: {e}")
+
+    # --- TREND FILTER CHECK ---
+    # Check if the latest candle is in an uptrend (Close > SMA200) AND ADX > 15 AND RSI_M5 < 75
+    if "dist_sma_200" in features.columns and "adx" in features.columns:
+        last_dist = features["dist_sma_200"].iloc[-1]
+        last_adx = features["adx"].iloc[-1]
+        
+        if last_dist <= 0:
+            logger.warning(f"Trend Filter: Price is below SMA200 (dist={last_dist:.4f}). Prediction forced to 0.")
+            return {
+                "probability": 0.0,
+                "prediction": 0,
+                "threshold": threshold,
+                "expected_win_rate": 0.0,
+                "confidence": "low (trend filter)",
+            }
+        if last_adx <= 15:
+            logger.warning(f"Trend Filter: ADX is too low (adx={last_adx:.2f}). Prediction forced to 0.")
+            return {
+                "probability": 0.0,
+                "prediction": 0,
+                "threshold": threshold,
+                "expected_win_rate": 0.0,
+                "confidence": "low (weak trend)",
+            }
+            
+    if "rsi_m5" in features.columns:
+        last_rsi = features["rsi_m5"].iloc[-1]
+        if last_rsi >= 75:
+            logger.warning(f"Pullback Filter: RSI_M5 is too high (rsi={last_rsi:.2f}). Prediction forced to 0.")
+            return {
+                "probability": 0.0,
+                "prediction": 0,
+                "threshold": threshold,
+                "expected_win_rate": 0.0,
+                "confidence": "low (overbought)",
+            }
+    # --------------------------
 
     # Flatten to model input format
     X = features.values.flatten().reshape(1, -1).astype(np.float32)

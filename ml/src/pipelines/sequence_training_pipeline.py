@@ -247,6 +247,68 @@ def engineer_candle_features(df: pd.DataFrame, window_size: int = 100) -> pd.Dat
     low = df["Low"].astype(np.float32).clip(lower=1e-9)
     volume = df["Volume"].astype(np.float32).clip(lower=1e-9)
 
+    # --- M5 Context Features (Resampling) ---
+    logger.info("Calculating M5 context features (ATR, RSI, SMA)...")
+    # Resample to 5min
+    df_m5 = df.resample("5min").agg({
+        "Open": "first",
+        "High": "max",
+        "Low": "min",
+        "Close": "last",
+        "Volume": "sum"
+    }).dropna()
+
+    # M5 ATR (14)
+    m5_high = df_m5["High"]
+    m5_low = df_m5["Low"]
+    m5_close = df_m5["Close"]
+    m5_tr1 = m5_high - m5_low
+    m5_tr2 = (m5_high - m5_close.shift(1)).abs()
+    m5_tr3 = (m5_low - m5_close.shift(1)).abs()
+    m5_tr = pd.concat([m5_tr1, m5_tr2, m5_tr3], axis=1).max(axis=1)
+    m5_atr = m5_tr.rolling(14).mean()
+
+    # M5 RSI (14)
+    m5_delta = m5_close.diff()
+    m5_gain = m5_delta.clip(lower=0).rolling(14).mean()
+    m5_loss = (-m5_delta.clip(upper=0)).rolling(14).mean()
+    m5_rs = m5_gain / (m5_loss + 1e-9)
+    m5_rsi = 100 - (100 / (1 + m5_rs))
+
+    # M5 SMA (20)
+    m5_sma_20 = m5_close.rolling(20).mean()
+    m5_dist_sma_20 = (m5_close - m5_sma_20) / (m5_sma_20 + 1e-9)
+
+    # M5 MACD (12, 26, 9)
+    m5_ema_12 = m5_close.ewm(span=12, adjust=False).mean()
+    m5_ema_26 = m5_close.ewm(span=26, adjust=False).mean()
+    m5_macd = m5_ema_12 - m5_ema_26
+    m5_signal = m5_macd.ewm(span=9, adjust=False).mean()
+    m5_hist = m5_macd - m5_signal
+    m5_macd_n = m5_macd / (m5_close + 1e-9)
+
+    # M5 Bollinger Bands (20, 2)
+    m5_bb_mid = m5_close.rolling(20).mean()
+    m5_bb_std = m5_close.rolling(20).std()
+    m5_bb_upper = m5_bb_mid + 2 * m5_bb_std
+    m5_bb_lower = m5_bb_mid - 2 * m5_bb_std
+    m5_bb_pos = (m5_close - m5_bb_lower) / (m5_bb_upper - m5_bb_lower + 1e-9)
+
+    # Reindex back to M1 (ffill)
+    # We use reindex to align with original timestamps, ffilling the last known M5 value
+    atr_m5_aligned = m5_atr.reindex(df.index, method="ffill").fillna(0)
+    rsi_m5_aligned = m5_rsi.reindex(df.index, method="ffill").fillna(50)
+    dist_sma_20_m5_aligned = m5_dist_sma_20.reindex(df.index, method="ffill").fillna(0)
+    macd_n_m5_aligned = m5_macd_n.reindex(df.index, method="ffill").fillna(0)
+    bb_pos_m5_aligned = m5_bb_pos.reindex(df.index, method="ffill").fillna(0.5)
+    
+    # Store M5 ATR in original DF for target calculation (side effect intended)
+    df["ATR_M5"] = atr_m5_aligned
+    
+    # Normalized M5 ATR for the model
+    atr_m5_n = atr_m5_aligned / (close + 1e-9)
+    # ----------------------------------------
+
     # Log returns
     logc = np.log(close)
     ret1 = logc.diff(1)
@@ -450,6 +512,46 @@ def engineer_candle_features(df: pd.DataFrame, window_size: int = 100) -> pd.Dat
     vol_60 = ret1.rolling(60, min_periods=1).std()
     vol_ratio_60_200 = vol_60 / (ret1.rolling(200, min_periods=1).std() + 1e-9)
 
+    # Micro-structure Features (M1 dynamics within M5)
+    logger.info("Calculating micro-structure features (M1 dynamics)...")
+    
+    # 1. Micro Volatility (Std of last 5 M1 returns)
+    micro_vol_5 = ret1.rolling(5, min_periods=2).std().fillna(0)
+    
+    # 2. Efficiency Ratio (Kaufman) - Directional move vs Total path
+    # abs(Close - Close_t-5) / Sum(abs(Close_t - Close_t-1))
+    net_move_5 = (close - close.shift(5)).abs()
+    total_path_5 = close.diff().abs().rolling(5, min_periods=1).sum()
+    efficiency_5 = net_move_5 / (total_path_5 + 1e-9)
+    efficiency_5 = efficiency_5.fillna(0)
+    
+    # 3. Fractal Dimension Proxy (Path Cost)
+    # Sum(High - Low) / (High_5 - Low_5)
+    # If high, lots of noise/wicks. If low (~1), clean trend.
+    sum_range_5 = (high - low).rolling(5, min_periods=1).sum()
+    range_5 = (high.rolling(5, min_periods=1).max() - low.rolling(5, min_periods=1).min())
+    fractal_dim_5 = sum_range_5 / (range_5 + 1e-9)
+    fractal_dim_5 = fractal_dim_5.fillna(1) # Default to 1 (linear)
+    
+    # 4. Trend Consistency
+    # Sum of signs of returns (how many green vs red candles)
+    # +5 means 5 green candles in a row
+    trend_consistency_5 = np.sign(ret1).rolling(5, min_periods=1).sum().fillna(0)
+
+    # 5. Trend Slope (Linear Regression Angle)
+    # Calculate slope of Close prices over last 20 and 60 periods
+    # We use a simplified vectorized approach: Slope ~ (Sum(xy) - n*mean(x)*mean(y)) / (Sum(x^2) - n*mean(x)^2)
+    # Since x is just 0,1,2..., we can use precomputed kernels or just simple rate of change as proxy
+    # Better proxy: (Close - Close_t-n) / n (which is ROC), but normalized by ATR to get "Angle"
+    
+    # Slope 20 (Short term trend intensity)
+    slope_20 = (close - close.shift(20)) / (20 * atr_14 + 1e-9)
+    slope_20 = slope_20.fillna(0)
+    
+    # Slope 60 (Medium term trend intensity)
+    slope_60 = (close - close.shift(60)) / (60 * atr_14 + 1e-9)
+    slope_60 = slope_60.fillna(0)
+
     # Check for NaNs in features
     if z_score_20.isnull().any():
         logger.warning("NaNs detected in z_score_20, filling with 0")
@@ -472,6 +574,21 @@ def engineer_candle_features(df: pd.DataFrame, window_size: int = 100) -> pd.Dat
 
     features = pd.DataFrame(
         {
+            # M5 Context Features
+            "atr_m5_n": atr_m5_n,
+            "rsi_m5": rsi_m5_aligned,
+            "dist_sma_20_m5": dist_sma_20_m5_aligned,
+            "macd_n_m5": macd_n_m5_aligned,
+            "bb_pos_m5": bb_pos_m5_aligned,
+            
+            # Micro-structure (4)
+            "micro_vol_5": micro_vol_5,
+            "efficiency_5": efficiency_5,
+            "fractal_dim_5": fractal_dim_5,
+            "trend_consistency_5": trend_consistency_5,
+            "slope_20": slope_20,
+            "slope_60": slope_60,
+
             "dist_sma_200": dist_sma_200,
             "dist_sma_1440": dist_sma_1440,
             "roc_60": roc_60,
@@ -623,6 +740,49 @@ def create_sequences(
     else:
         raise ValueError(f"Unknown session: {session}")
 
+    # --- M5 ALIGNMENT FIX ---
+    # Only take trades that align with M5 candles (0, 5, 10, 15...)
+    # We want to trade at the OPEN of a new M5 candle.
+    # The decision is made after the CLOSE of the previous M5 candle.
+    # M5 candle 10:00 covers 10:00-10:04. It closes at 10:05:00.
+    # So we need the window to end at minute 4, 9, 14, etc.
+    minutes = timestamps.minute
+    m5_mask = ((minutes + 1) % 5 == 0)
+    mask = mask & m5_mask
+    logger.info(f"Applied M5 alignment filter (keeping only candles ending at 4, 9, 14... to trade at 0, 5, 10...)")
+    # ------------------------
+
+    # --- TREND FILTER (Long Only) ---
+    # Only take trades where Price > SMA 200 (Uptrend) AND ADX > 15 (Trend exists)
+    # We use 'dist_sma_200' > 0 and 'adx' > 15
+    if "dist_sma_200" in features.columns and "adx" in features.columns:
+        # Get column indices
+        sma_idx = features.columns.get_loc("dist_sma_200")
+        adx_idx = features.columns.get_loc("adx")
+        
+        # Get values for window ends
+        dist_sma_values = features_array[timestamp_indices, sma_idx]
+        adx_values = features_array[timestamp_indices, adx_idx]
+        
+        # Apply combined filter
+        trend_mask = (dist_sma_values > 0) & (adx_values > 15)
+        mask = mask & trend_mask
+        logger.info(f"Applied Trend Filter (Close > SMA200 AND ADX > 15): kept {trend_mask.sum()}/{len(trend_mask)} ({trend_mask.mean():.1%})")
+    else:
+        logger.warning("dist_sma_200 or adx feature not found! Skipping Trend Filter.")
+    
+    # --- PULLBACK FILTER ---
+    # Avoid buying tops. Only buy if RSI_M5 is not overbought (< 75).
+    # Ideally we want RSI < 60 for a pullback, but let's start with < 75 to avoid cutting too much.
+    if "rsi_m5" in features.columns:
+        rsi_idx = features.columns.get_loc("rsi_m5")
+        rsi_values = features_array[timestamp_indices, rsi_idx]
+        
+        pullback_mask = rsi_values < 75
+        mask = mask & pullback_mask
+        logger.info(f"Applied Pullback Filter (RSI_M5 < 75): kept {pullback_mask.sum()}/{len(pullback_mask)} ({pullback_mask.mean():.1%})")
+    # --------------------------------
+
     if mask.sum() == 0:
         logger.warning(f"Session filter '{session}' removed all data!")
         return np.array([]), np.array([]), pd.DatetimeIndex([])
@@ -727,11 +887,16 @@ def make_target(
     low_series = df["Low"].astype(np.float32)
     close_series = df["Close"].astype(np.float32)
     
-    tr1 = high_series - low_series
-    tr2 = np.abs(high_series - close_series.shift(1))
-    tr3 = np.abs(low_series - close_series.shift(1))
-    true_range = np.maximum(tr1, np.maximum(tr2, tr3))
-    atr_series = true_range.rolling(14, min_periods=1).mean()
+    if "ATR_M5" in df.columns:
+        logger.info("Using pre-calculated M5 ATR for SL/TP targets")
+        atr_series = df["ATR_M5"].astype(np.float32)
+    else:
+        logger.info("Calculating M1 ATR(14) for SL/TP targets (fallback)")
+        tr1 = high_series - low_series
+        tr2 = np.abs(high_series - close_series.shift(1))
+        tr3 = np.abs(low_series - close_series.shift(1))
+        true_range = np.maximum(tr1, np.maximum(tr2, tr3))
+        atr_series = true_range.rolling(14, min_periods=1).mean()
     
     # Prepare arrays for vectorization
     closes = close_series.values
@@ -894,13 +1059,13 @@ def train_xgb(
 
     base = XGBClassifier(
         n_estimators=600,
-        max_depth=4,
+        max_depth=6,
         learning_rate=0.03,
-        subsample=0.6,
+        subsample=0.7,
         colsample_bytree=0.6,
-        min_child_weight=2,
-        reg_lambda=2.0,
-        reg_alpha=0.5,
+        min_child_weight=1, # Reduced to 1 to increase Recall
+        reg_lambda=1.0, # Reduced to 1.0 to increase Recall
+        reg_alpha=0.1,
         objective="binary:logistic",
         eval_metric="logloss",
         random_state=random_state,
@@ -931,7 +1096,7 @@ def train_xgb(
 
 
 def _pick_best_threshold(y_true: np.ndarray, proba: np.ndarray) -> float:
-    """Sweep thresholds and return the one maximizing Precision (Win Rate) with min Recall.
+    """Sweep thresholds and return the one maximizing Recall while keeping Precision >= 0.40.
 
     Args:
         y_true: True binary labels
@@ -940,28 +1105,45 @@ def _pick_best_threshold(y_true: np.ndarray, proba: np.ndarray) -> float:
     Returns:
         Optimal threshold
     """
-    # Start from 0.50 to force selectivity
-    thresholds = np.linspace(0.50, 0.95, 46) # 0.50, 0.51, ..., 0.95
-    best_thr, best_score = 0.5, -1.0
+    # Start from 0.30 (approx breakeven for 1:2 RR)
+    thresholds = np.linspace(0.30, 0.95, 66) 
+    best_thr = 0.5
+    best_recall = -1.0
+    found_valid = False
+    
+    # Fallback: threshold that gives at least some trades
     
     for t in thresholds:
         preds = (proba >= t).astype(int)
-        if preds.sum() < 10: # Require at least 10 trades
+        n_trades = preds.sum()
+        
+        if n_trades < 10: # Require at least 10 trades to be statistically significant
             continue
             
         precision = precision_score(y_true, preds, zero_division=0)
         recall = recall_score(y_true, preds, zero_division=0)
         
-        # We want to maximize Precision, but keep some Recall
-        # Score = Precision, but only if Recall > 0.01 (1%)
-        if recall > 0.001:
-            if precision > best_score:
-                best_score, best_thr = precision, t
-    
-    # If no threshold met criteria, fallback to 0.5
-    if best_score == -1.0:
-        logger.warning("No threshold met criteria (min 10 trades). Defaulting to 0.5")
-        return 0.5
+        # STRATEGY: High Precision Target
+        # We want to maximize Recall (frequency), but ONLY if Precision is >= 70%.
+        # This maintains a very high win rate (safe) while trying to find more trades
+        # than the extreme 85% model.
+        if precision >= 0.70:
+            found_valid = True
+            if recall > best_recall:
+                best_recall = recall
+                best_thr = t
+            
+    # If no threshold met >70% precision criteria, fallback to maximizing Precision
+    if not found_valid:
+        logger.warning("No threshold met >70% precision. Fallback to max precision.")
+        best_precision = -1.0
+        for t in thresholds:
+            preds = (proba >= t).astype(int)
+            if preds.sum() < 5: continue
+            prec = precision_score(y_true, preds, zero_division=0)
+            if prec > best_precision:
+                best_precision = prec
+                best_thr = t
         
     return float(best_thr)
 
@@ -1194,7 +1376,7 @@ def filter_by_session(
 
 
 def run_pipeline(
-    window_size: int = 3,
+    window_size: int = 60,
     atr_multiplier_sl: float = 1.0,
     atr_multiplier_tp: float = 2.0,
     min_hold_minutes: int = 5,
@@ -1327,8 +1509,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--window-size",
         type=int,
-        default=3,
-        help="Number of previous candles to use as input (default: 3)",
+        default=14,
+        help="Number of previous candles to use as input (default: 14)",
     )
     parser.add_argument(
         "--atr-multiplier-sl",

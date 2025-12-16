@@ -35,6 +35,18 @@ XGBoost Classifier (calibrated probabilities)
 Output: Probability + Win Rate estimate
 ```
 
+## Strategy Alignment (M5 vs M1)
+
+The model is designed to trade **M5 setups** using **M1 data** for precision.
+
+- **Input Data**: 1-minute OHLCV (for granular feature engineering and precise SL/TP checks).
+- **Strategy Timeframe**: 5-minute (M5).
+- **Alignment**:
+  - **Entry**: Only considers candles at M5 open times (0, 5, 10, ...).
+  - **Targets**: SL/TP calculated using **M5 ATR** (14-period) to match strategy volatility.
+  - **Context**: Includes M5 indicators (RSI, SMA, ATR) as features.
+  - **Trend Filter**: Only considers Long trades when Price > SMA 200 (Uptrend).
+
 ### Why This Approach?
 
 1. **Temporal Context**: Model sees market structure over last 100 minutes (~1.5 hours)
