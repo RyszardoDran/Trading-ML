@@ -3,9 +3,10 @@
 Purpose:
     Create binary target labels for model training (win/loss).
 
-Note:
-    This module will be populated in Etap 3 with:
+Exports:
     - make_target(): Backtest-based target creation
 """
 
-__all__ = []
+from ml.src.targets.target_maker import make_target
+
+__all__ = ["make_target"]

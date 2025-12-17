@@ -3,14 +3,20 @@
 Purpose:
     Create sliding windows of features and apply session/trend/pullback filters.
 
-Public API:
+Exports:
+    - create_sequences(): Main function to create sliding windows
+    - filter_by_session(): Apply session time filters
     - SequenceFilterConfig: Configuration dataclass for filters
 
 Example:
-    >>> from ml.src.sequences.config import SequenceFilterConfig
-    >>> config = SequenceFilterConfig(enable_trend_filter=True)
+    >>> from ml.src.sequences import create_sequences
+    >>> X, y, ts = create_sequences(features, targets, window_size=100)
 """
 
-from .config import SequenceFilterConfig
+from ml.src.sequences.sequencer import create_sequences
+from ml.src.sequences.filters import filter_by_session
+from ml.src.sequences.config import SequenceFilterConfig
+
+__all__ = ["create_sequences", "filter_by_session", "SequenceFilterConfig"]
 
 __all__ = ["SequenceFilterConfig"]
