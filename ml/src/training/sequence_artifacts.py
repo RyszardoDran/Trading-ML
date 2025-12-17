@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
-from sklearn.calibration import CalibratedClassifierCV
+from xgboost import XGBClassifier
 from sklearn.preprocessing import RobustScaler
 
 from ml.src.training.sequence_feature_analysis import analyze_feature_importance
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def save_artifacts(
-    model: CalibratedClassifierCV,
+    model: XGBClassifier,
     scaler: RobustScaler,
     feature_cols: List[str],
     models_dir: Path,
@@ -31,14 +31,14 @@ def save_artifacts(
     """Save trained model, scaler, and metadata to disk.
 
     Saves all artifacts needed for production inference:
-    - Trained and calibrated XGBoost model (pickle)
+    - Trained XGBoost model (pickle)
     - Fitted RobustScaler for feature normalization (pickle)
     - Ordered feature column names (JSON)
     - Classification threshold and metadata (JSON)
     - Top feature importances (JSON)
 
     Args:
-        model: Trained CalibratedClassifierCV classifier
+        model: Trained XGBClassifier classifier
         scaler: Fitted RobustScaler for feature normalization
         feature_cols: Ordered list of per-candle feature column names
         models_dir: Directory path where artifacts will be saved

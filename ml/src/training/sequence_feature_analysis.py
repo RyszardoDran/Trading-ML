@@ -8,25 +8,24 @@ import logging
 from typing import Dict, List
 
 import numpy as np
-from sklearn.calibration import CalibratedClassifierCV
+from xgboost import XGBClassifier
 
 logger = logging.getLogger(__name__)
 
 
 def analyze_feature_importance(
-    model: CalibratedClassifierCV,
+    model: XGBClassifier,
     feature_cols: List[str],
     window_size: int,
     top_k: int = 20,
 ) -> Dict[str, float]:
     """Analyze feature importance from trained XGBoost model.
     
-    Extracts feature importances from the base XGBoost estimator in a calibrated
-    classifier, maps them to per-candle feature names with time offsets, and
-    returns top-k features for analysis.
+    Extracts feature importances from the XGBoost classifier and maps them to 
+    per-candle feature names with time offsets, then returns top-k features for analysis.
     
     Args:
-        model: Trained CalibratedClassifierCV wrapping XGBoost classifier
+        model: Trained XGBClassifier
         feature_cols: List of per-candle feature names (e.g., ['open', 'high', ...])
         window_size: Number of candles in each input window
         top_k: Number of top features to return, default 20
@@ -40,8 +39,8 @@ def analyze_feature_importance(
         >>> importance = analyze_feature_importance(model, ['open', 'high', 'low', 'close'], window_size=100)
         >>> # Result: {'t-0_close': 0.0523, 't-1_high': 0.0412, ...}
     """
-    # Get base estimator (XGBoost) from calibrated model
-    base_model = model.calibrated_classifiers_[0].estimator
+    # Get feature importances directly from XGBoost model
+    base_model = model
     
     # Get feature importances
     importances = base_model.feature_importances_

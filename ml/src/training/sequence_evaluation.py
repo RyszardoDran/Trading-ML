@@ -9,7 +9,7 @@ from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
-from sklearn.calibration import CalibratedClassifierCV
+from xgboost import XGBClassifier
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
@@ -145,7 +145,7 @@ def _pick_best_threshold(
 
 
 def evaluate(
-    model: CalibratedClassifierCV,
+    model: XGBClassifier,
     X_test: np.ndarray,
     y_test: np.ndarray,
     min_precision: float = 0.85,

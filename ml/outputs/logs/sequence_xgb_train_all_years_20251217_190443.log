@@ -1,0 +1,57 @@
+2025-12-17 19:04:43 - ml.src.pipeline_config_extended - INFO - Pipeline configuration validated successfully
+2025-12-17 19:04:43 - __main__ - INFO - 
+================================================================================
+2025-12-17 19:04:43 - __main__ - INFO - SEQUENCE XGBoost TRAINING PIPELINE - XAU/USD 1-Minute Data
+2025-12-17 19:04:43 - __main__ - INFO - ================================================================================
+2025-12-17 19:04:43 - __main__ - INFO - Log file: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\logs\sequence_xgb_train_all_years_20251217_190443.log
+2025-12-17 19:04:43 - __main__ - INFO - Start time: 2025-12-17 19:04:43
+2025-12-17 19:04:43 - __main__ - INFO - Data years: All available years
+2025-12-17 19:04:43 - __main__ - INFO - 
+Pipeline Configuration:
+2025-12-17 19:04:43 - __main__ - INFO -   Feature engineering version: v2
+2025-12-17 19:04:43 - __main__ - INFO -   Window size: 60 candles
+2025-12-17 19:04:43 - __main__ - INFO -   ATR SL multiplier: 0.1x (OPTION B optimized)
+2025-12-17 19:04:43 - __main__ - INFO -   ATR TP multiplier: 0.2x (OPTION B optimized)
+2025-12-17 19:04:43 - __main__ - INFO -   Min hold time: 5 minutes
+2025-12-17 19:04:43 - __main__ - INFO -   Max horizon: 60 candles
+2025-12-17 19:04:43 - __main__ - INFO -   Trading session: london_ny
+2025-12-17 19:04:43 - __main__ - INFO -   Min precision threshold: 0.85
+2025-12-17 19:04:43 - __main__ - INFO -   M5 alignment filter: enabled
+2025-12-17 19:04:43 - __main__ - INFO -   Trend filter: enabled
+2025-12-17 19:04:43 - __main__ - INFO -   Pullback filter: enabled
+2025-12-17 19:04:43 - __main__ - INFO -   Random state: 42
+2025-12-17 19:04:43 - __main__ - INFO - ================================================================================
+
+2025-12-17 19:04:43 - ml.src.pipeline_stages - INFO - Loading data from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-17 19:04:55 - ml.src.pipeline_stages - INFO - Loaded 6,695,760 rows from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-17 19:04:55 - ml.src.pipeline_stages - INFO - Date range: 2004-06-11 07:18:00 to 2025-12-01 04:19:00
+2025-12-17 19:04:55 - ml.src.pipeline_stages - INFO - Engineering technical features (version=v2, window_size=60)...
+2025-12-17 19:04:55 - ml.src.features.engineer_v2 - INFO - Engineering features for 6,695,760 candles (V2 - Multi-TF Focus)...
+2025-12-17 19:04:56 - ml.src.features.engineer_v2 - INFO - Computing M5 features using rolling windows...
+2025-12-17 19:05:01 - ml.src.features.engineer_v2 - INFO - Computing M15 features using rolling windows...
+2025-12-17 19:05:05 - ml.src.features.engineer_v2 - INFO - Computing M60 features using rolling windows...
+2025-12-17 19:05:19 - ml.src.features.engineer_v2 - INFO - Feature engineering V2 complete: 6695760 rows × 15 features
+2025-12-17 19:05:20 - ml.src.pipeline_stages - INFO - Features shape: (6695760, 15)
+2025-12-17 19:05:20 - ml.src.pipeline_stages - INFO - Feature columns: 15
+2025-12-17 19:05:20 - ml.src.pipeline_stages - INFO - Creating targets (SL=0.1×ATR, TP=0.2×ATR, min_hold=5min, max_horizon=60)
+2025-12-17 19:05:20 - ml.src.targets.target_maker - INFO - Creating targets (SL/TP simulation) for 6,695,760 candles...
+2025-12-17 19:05:20 - ml.src.targets.target_maker - INFO - Parameters: SL=0.1×ATR, TP=0.2×ATR, min_hold=5min, max_horizon=60min
+2025-12-17 19:05:20 - ml.src.targets.target_maker - INFO - Calculating M1 ATR(14) for SL/TP targets (fallback)
+2025-12-17 19:05:24 - ml.src.targets.target_maker - INFO - Target creation complete: 6,695,700 valid targets
+2025-12-17 19:05:24 - ml.src.pipeline_stages - INFO - Targets shape: 6695700
+2025-12-17 19:05:24 - ml.src.pipeline_stages - INFO - Positive class (win): 3,794,448 (56.67%)
+2025-12-17 19:05:24 - ml.src.pipeline_stages - INFO - Negative class (loss): 2,901,252 (43.33%)
+2025-12-17 19:05:24 - ml.src.pipeline_stages - INFO - Creating sequences (window_size=60)...
+2025-12-17 19:05:24 - ml.src.pipeline_stages - INFO - Filter config: m5=True, trend=True, pullback=True, max_windows=200,000
+2025-12-17 19:05:31 - ml.src.sequences.sequencer - INFO - Applied M5 alignment filter (keeping only candles ending at 4, 9, 14... to trade at 0, 5, 10...)
+2025-12-17 19:05:31 - ml.src.sequences.sequencer - WARNING - dist_sma_200 or adx feature not found; skipping trend filter
+2025-12-17 19:05:31 - ml.src.sequences.sequencer - INFO - Applied Pullback Filter (RSI_M5 < 75.00): kept 5573987/6695641 (83.2%)
+2025-12-17 19:05:31 - ml.src.sequences.sequencer - INFO - Session filter 'london_ny': keeping 705,701 / 6,695,641 windows (10.5%)
+2025-12-17 19:05:31 - ml.src.sequences.sequencer - WARNING - Too many windows (705,701) for memory safety. Capping to last 200,000 windows.
+2025-12-17 19:05:31 - ml.src.sequences.sequencer - INFO - After capping: 200,000 windows
+2025-12-17 19:05:32 - ml.src.pipeline_stages - INFO - Sequences created: X.shape=(200000, 900), y.shape=(200000,)
+2025-12-17 19:05:32 - ml.src.pipeline_stages - INFO - Positive class in sequences: 116,047 (58.02%)
+2025-12-17 19:05:32 - ml.src.pipeline_stages - INFO - Splitting data chronologically (train/val/test)...
+2025-12-17 19:05:32 - ml.src.pipeline_stages - INFO - Using fixed date split for full dataset
+2025-12-17 19:05:32 - ml.src.pipeline_stages - INFO - Split sizes: train=103,748, val=35,521, test=35,880
+2025-12-17 19:05:32 - ml.src.pipeline_stages - INFO - Scaling features with RobustScaler (robust to outliers)...

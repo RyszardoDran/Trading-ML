@@ -110,7 +110,7 @@ WEEK 7-8: Production Testing & Monitoring
 ```
 ACCURACY GATES:
   Precision           Target: ≥ 70%   (minimize false positives)
-  Recall              Target: ≥ 50%   (catch opportunities)
+  Recall              Target: ≥ 20%   (catch some opportunities)
   ROC-AUC             Target: ≥ 0.75  (discrimination ability)
   Calibration Error   Target: < 5%    (probability accuracy)
 

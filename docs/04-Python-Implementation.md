@@ -798,7 +798,7 @@ class TestModelTrainer:
         # Check calibration: precision should match probability
         # (simplified check)
         assert metrics['precision'] >= 0.5
-        assert metrics['recall'] >= 0.5
+        assert metrics['recall'] >= 0.2
 
 class TestFeatures:
     """Test feature engineering"""

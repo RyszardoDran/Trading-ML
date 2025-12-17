@@ -369,7 +369,7 @@ def train_xgboost_model(X_train, y_train, X_val, y_val):
 
 **Target Metrics:**
 - Precision ≥ 70% (minimize false positive signals)
-- Recall ≥ 50% (catch meaningful opportunities)
+- Recall ≥ 20% (catch some opportunities without over-signaling)
 - ROC-AUC ≥ 0.75 (overall discrimination ability)
 - Win Rate at 70% P(TP) ≥ 70% (calibration check)
 

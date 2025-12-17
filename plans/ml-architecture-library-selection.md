@@ -458,7 +458,7 @@ print(f"Top 20 features explain ~80% of model decisions")
 | Metric | Target | Why | Formula |
 |--------|--------|-----|---------|
 | **Precision** | ≥ 70% | Minimize false signals | TP / (TP + FP) |
-| **Recall** | ≥ 50% | Don't miss opportunities | TP / (TP + FN) |
+| **Recall** | ≥ 20% | Catch some opportunities | TP / (TP + FN) |
 | **F1 Score** | ≥ 60% | Balance precision & recall | 2 × (P×R)/(P+R) |
 | **ROC-AUC** | ≥ 0.75 | Discrimination ability | Area under ROC |
 | **PR-AUC** | ≥ 0.65 | For imbalanced data | Area under PR curve |

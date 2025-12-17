@@ -1,49 +1,52 @@
 from __future__ import annotations
-"""Sequence-based training pipeline for XAU/USD (1-minute data).
+"""Sequence-based training pipeline orchestrator for XAU/USD (1-minute data).
 
-Purpose:
-- Load historical 1m OHLCV data from `ml/src/data/`
-- Create sliding windows of 60 candles (configurable) as input features
-- Engineer features for each candle in the sequence (flatten to XGBoost input)
-- Train XGBoost classifier with calibrated probability estimates
-- Validate win rate on test set with realistic thresholds
-- Provide user with expected win rate and confidence metrics
+**PURPOSE**: End-to-end training pipeline orchestrator. Coordinates execution
+of modularized pipeline stages: data loading, feature engineering, target creation,
+sequence building, data splitting/scaling, model training, and artifact saving.
 
-Key principles:
-- Temporal context: Model sees 100 previous candles before making prediction
-- No data leakage: Strict chronological split, no future information
-- Win rate validation: Precision, recall, F1, and confusion matrix on test
+**WHAT THIS DOES**:
+1. Parse CLI arguments and validate configuration
+2. Setup logging to unique timestamped file
+3. Execute pipeline stages in sequence
+4. Handle errors and report results
+
+**KEY PRINCIPLES**:
+- Modularity: Each stage is a separate function in pipeline_stages.py
+- Clarity: Main run_pipeline() is 40 lines - coordinates stages only
+- Type Safety: All functions have comprehensive type hints
 - Reproducibility: Fixed random seeds, deterministic behavior
-- Production-ready: Type hints, validation, error handling, logging
+- Production-Ready: Comprehensive logging, error handling, validation
 
-Inputs (CSV):
+**INPUTS** (CSV):
 - `ml/src/data/XAU_1m_data_*.csv` (semicolon-separated OHLCV)
 
-Outputs (artifacts):
-- `ml/src/models/sequence_xgb_model.pkl` (calibrated classifier)
-- `ml/src/models/sequence_feature_columns.json` (ordered feature names)
-- `ml/src/models/sequence_threshold.json` (selected threshold + win rate)
+**OUTPUTS** (artifacts saved to ml/src/models/):
+- sequence_xgb_model.pkl: Calibrated XGBoost classifier
+- sequence_scaler.pkl: RobustScaler fitted on training data
+- sequence_feature_columns.json: Ordered list of feature names
+- sequence_metadata.json: Training configuration
+- sequence_threshold.json: Decision threshold + win rate
 
-Expected columns: [Date;Open;High;Low;Close;Volume]
-Separator: `;`, Date parseable to datetime
-
-Usage:
-    # Train with default parameters
+**USAGE**:
+    # Train with defaults
     python sequence_training_pipeline.py
     
-    # Train with custom window size and horizon
-    python sequence_training_pipeline.py --window-size 50 --horizon 10
+    # Custom parameters
+    python sequence_training_pipeline.py --window-size 50 --min-precision 0.90
     
-    # Health check only
-    python sequence_training_pipeline.py --health-check-dir ml/src/data
+    # Specific years
+    python sequence_training_pipeline.py --years 2023,2024
+
+**EXPECTED COLUMNS**: [Date;Open;High;Low;Close;Volume]
+**SEPARATOR**: `;` (semicolon)
 """
 
-import json
 import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 # Add parent directories to path for imports
 _script_dir = Path(__file__).parent
@@ -52,20 +55,24 @@ _repo_dir = _src_dir.parent.parent
 sys.path.insert(0, str(_repo_dir))
 
 import numpy as np
-import pandas as pd
-from sklearn.preprocessing import RobustScaler
-
-# Import from modularized components
-from ml.src.data_loading import load_all_years, validate_schema
-from ml.src.sequences import create_sequences, filter_by_session, SequenceFilterConfig
-from ml.src.targets import make_target
+from ml.src.pipeline_cli import parse_cli_arguments, parse_and_validate_years
+from ml.src.pipeline_config_extended import PipelineParams
+from ml.src.pipeline_stages import (
+    build_sequences_stage,
+    create_targets_stage,
+    engineer_features_stage,
+    load_and_prepare_data,
+    save_model_artifacts,
+    split_and_scale_stage,
+    train_and_evaluate_stage,
+)
 from ml.src.utils import PipelineConfig
-from ml.src.pipelines.sequence_split import split_sequences
-from ml.src.features import engineer_candle_features
-from ml.src.training import train_xgb, evaluate, save_artifacts
 
 
-def _setup_logging(config: PipelineConfig, year_filter: Optional[List[int]] = None) -> str:
+logger = logging.getLogger(__name__)
+
+
+def _setup_logging(config: PipelineConfig, year_filter: Optional[list[int]] = None) -> str:
     """Setup logging to file with unique timestamp-based name.
     
     Args:
@@ -117,379 +124,171 @@ def _setup_logging(config: PipelineConfig, year_filter: Optional[List[int]] = No
     return str(log_filepath)
 
 
-logger = logging.getLogger(__name__)
 
+def run_pipeline(params: PipelineParams) -> Dict[str, float]:
+    """Execute end-to-end sequence XGBoost training pipeline.
 
-def run_pipeline(
-    window_size: int = 60,
-    atr_multiplier_sl: float = 1.0,
-    atr_multiplier_tp: float = 2.0,
-    min_hold_minutes: int = 5,
-    max_horizon: int = 60,
-    random_state: int = 42,
-    year_filter: List[int] = None,
-    session: str = "london_ny",
-    custom_start_hour: int = None,
-    custom_end_hour: int = None,
-    max_windows: int = 200000,
-    min_precision: float = 0.85,
-    min_trades: int | None = None,
-    max_trades_per_day: int | None = None,
-    enable_m5_alignment: bool = True,
-    enable_trend_filter: bool = True,
-    trend_min_dist_sma200: float | None = 0.0,
-    trend_min_adx: float | None = 15.0,
-    enable_pullback_filter: bool = True,
-    pullback_max_rsi_m5: float | None = 75.0,
-) -> Dict[str, float]:
-    """Execute end-to-end sequence XGBoost training pipeline for XAU/USD trading.
-
-    **PURPOSE**: Train a calibrated XGBoost classifier on sliding window sequences
-    of 1-minute candlestick data to predict profitable trading opportunities in XAU/USD.
+    **PURPOSE**: Orchestrate complete training pipeline from data loading
+    through model evaluation. Coordinates modularized stages and handles
+    intermediate data passing.
     
-    **WHAT THIS DOES**:
-    1. Loads historical XAU/USD 1-minute OHLCV data from ml/src/data/
-    2. Engineers 57+ technical features per candle (ATR, RSI, MACD, Bollinger Bands, etc.)
-    3. Creates overlapping sliding windows of N consecutive candles as training sequences
-    4. Assigns binary labels (0=loss, 1=win) based on SL/TP simulation with ATR multiples
-    5. Applies session filters (London/NY hours, trend conditions, pullback guards)
-    6. Splits chronologically into train/val/test sets (no data leakage)
-    7. Trains XGBoost classifier with early stopping on validation set
-    8. Calibrates probability estimates for reliable confidence scoring
-    9. Evaluates on test set and selects optimal decision threshold
-    10. Saves artifacts: model, scaler, feature columns, threshold configuration
+    **PIPELINE STAGES**:
+    1. Load and prepare raw OHLCV data
+    2. Engineer 57+ technical features
+    3. Create binary target labels (SL/TP simulation)
+    4. Build sliding window sequences
+    5. Split chronologically, scale features (no leakage)
+    6. Train calibrated XGBoost model
+    7. Evaluate on test set with threshold optimization
+    8. Save artifacts (model, scaler, metadata)
 
     **DATA FLOW**:
-    Raw OHLCV → Feature Engineering → Sequences → Session Filtering → 
-    Train/Val/Test Split → Scaling (no leakage) → XGBoost Training → 
-    Calibration → Threshold Optimization → Evaluation
+    Raw OHLCV → Features → Targets → Sequences → Split/Scale → 
+    Train/Val/Test → XGBoost Training → Calibration → Evaluation
 
-    **OUTPUTS** (saved to ml/outputs/models/):
-    - sequence_xgb_model.pkl: Calibrated XGBoost classifier
-    - sequence_scaler.pkl: RobustScaler fitted on training features
-    - sequence_feature_columns.json: Ordered list of 57+ feature names
-    - sequence_metadata.json: Training configuration and hyperparameters
-    - sequence_threshold.json: Optimal decision threshold and expected win rate
-
-    **VALIDATION & SAFETY**:
-    - Temporal chronological split (no lookahead bias)
-    - Scaler fit ONLY on training set (prevent leakage)
-    - Early stopping using independent validation set
-    - Win rate (precision) reported on held-out test set
-    - Session filtering removes low-quality trading hours
-    - Trend/pullback guards reduce false signals
+    **OUTPUTS** (saved to ml/src/models/):
+    - sequence_xgb_model.pkl: Calibrated classifier
+    - sequence_scaler.pkl: RobustScaler fitted on training
+    - sequence_feature_columns.json: Ordered feature names
+    - sequence_metadata.json: Configuration
+    - sequence_threshold.json: Threshold + win_rate
 
     Args:
-        window_size: Number of previous candles to use as input (default: 60)
-        atr_multiplier_sl: ATR multiplier for stop-loss (default: 1.0)
-        atr_multiplier_tp: ATR multiplier for take-profit (default: 2.0 for 2:1 RR)
-        min_hold_minutes: Minimum holding time in minutes (default: 5)
-        max_horizon: Maximum forward candles to simulate (default: 60)
-        random_state: Random seed for reproducibility (default: 42)
-        year_filter: Optional list of years to load (e.g., [2023, 2024] for testing)
-        max_windows: Maximum number of windows to keep to avoid OOM (default: 200,000)
-        min_precision: Minimum precision (win rate) floor for threshold selection (default: 0.85)
-        min_trades: Minimum number of predicted positives for threshold to be considered
-        max_trades_per_day: Cap number of predicted trades per day after thresholding
-        enable_m5_alignment: Align decisions with M5 candle closes when True (default: True)
-        enable_trend_filter: Enforce SMA200/ADX trend conditions when True (default: True)
-        trend_min_dist_sma200: Minimum normalized distance above SMA200; None to disable
-        trend_min_adx: Minimum ADX threshold for trend filter; None to disable
-        enable_pullback_filter: Enforce RSI_M5 pullback guard when True (default: True)
-        pullback_max_rsi_m5: Maximum RSI_M5 allowed; None to disable
+        params: PipelineParams object with all configuration
 
     Returns:
         Dictionary with evaluation metrics:
-        - threshold: Optimal decision threshold (0-1)
+        - threshold: Optimal decision threshold
         - win_rate: Precision on test set (expected win rate)
-        - precision: Precision (TP / (TP + FP))
-        - recall: Recall (TP / (TP + FN))
+        - precision: True precision
+        - recall: True recall
         - f1: F1 score
-        - roc_auc: Area under ROC curve
-        - pr_auc: Area under Precision-Recall curve
+        - roc_auc: ROC AUC
+        - pr_auc: Precision-Recall AUC
         - confusion_matrix: [TN, FP, FN, TP]
-        - n_positive_predictions: Count of predicted positives at threshold
+        - n_positive_predictions: Count predicted positives
 
     Raises:
-        FileNotFoundError: If data files not found at ml/src/data/
-        ValueError: On validation failures or insufficient data
+        FileNotFoundError: If data not found
+        ValueError: On validation failures
         
     Notes:
-        - THIS IS CRITICAL PRODUCTION TRAINING CODE
-        - All hyperparameters, feature engineering, and filters are NOT random
-        - Random seeds fixed for reproducibility (seeded model, scaler, splits)
-        - Results logged to ml/outputs/logs/sequence_xgb_train_*.log with timestamp
+        - CRITICAL PRODUCTION CODE: Used for live trading model training
+        - All stages validated and tested independently
+        - Random seeds fixed for reproducibility
+        - Logs to timestamped file with full pipeline summary
     """
-    np.random.seed(random_state)
+    # Set random seeds for reproducibility
+    np.random.seed(params.random_state)
     import random
-    random.seed(random_state)
-    data_dir = Path(__file__).parent.parent / "data"
-    models_dir = Path(__file__).parent.parent / "models"
-
-    logger.info("Loading data...")
-    df = load_all_years(data_dir, year_filter=year_filter)
-    logger.info(f"Loaded {len(df):,} rows from {data_dir}")
-
-    logger.info(f"Engineering per-candle features (window_size={window_size})...")
-    features = engineer_candle_features(df, window_size=window_size)
-    logger.info(f"Features shape: {features.shape}")
-
-    logger.info(f"Creating target (SL={atr_multiplier_sl}×ATR, TP={atr_multiplier_tp}×ATR, min_hold={min_hold_minutes}min)...")
-    targets = make_target(
-        df.loc[features.index],
-        atr_multiplier_sl=atr_multiplier_sl,
-        atr_multiplier_tp=atr_multiplier_tp,
-        min_hold_minutes=min_hold_minutes,
-        max_horizon=max_horizon,
-    )
-    logger.info(f"Target shape: {len(targets)}, positive class: {targets.sum()} ({targets.mean():.2%})")
-
-    logger.info(f"Creating sequences (window_size={window_size})...")
-    if window_size < 1:
-        raise ValueError(f"window_size must be >= 1, got {window_size}")
-    filter_config = SequenceFilterConfig(
-        enable_m5_alignment=enable_m5_alignment,
-        enable_trend_filter=enable_trend_filter,
-        trend_min_dist_sma200=trend_min_dist_sma200,
-        trend_min_adx=trend_min_adx,
-        enable_pullback_filter=enable_pullback_filter,
-        pullback_max_rsi_m5=pullback_max_rsi_m5,
-    )
-    logger.info(
-        "Filter configuration: m5=%s, trend=%s(dist_sma200=%s, adx=%s), pullback=%s(rsi<=%s)"
-        % (
-            enable_m5_alignment,
-            enable_trend_filter,
-            trend_min_dist_sma200 if trend_min_dist_sma200 is not None else "disabled",
-            trend_min_adx if trend_min_adx is not None else "disabled",
-            enable_pullback_filter,
-            pullback_max_rsi_m5 if pullback_max_rsi_m5 is not None else "disabled",
-        )
-    )
-    X, y, timestamps = create_sequences(
+    random.seed(params.random_state)
+    
+    # Setup directories
+    config = PipelineConfig()
+    data_dir = config.data_dir
+    models_dir = config.outputs_models_dir
+    
+    # ===== STAGE 1: Load data =====
+    df = load_and_prepare_data(data_dir, year_filter=params.year_filter)
+    
+    # ===== STAGE 2: Engineer features =====
+    features = engineer_features_stage(df, window_size=params.window_size, feature_version=params.feature_version)
+    
+    # ===== STAGE 3: Create targets =====
+    targets = create_targets_stage(
+        df,
         features,
-        targets,
-        window_size=window_size,
-        session=session,
-        custom_start=custom_start_hour,
-        custom_end=custom_end_hour,
-        filter_config=filter_config,
-        max_windows=max_windows,
+        atr_multiplier_sl=params.atr_multiplier_sl,
+        atr_multiplier_tp=params.atr_multiplier_tp,
+        min_hold_minutes=params.min_hold_minutes,
+        max_horizon=params.max_horizon,
     )
-    logger.info(f"Sequences: X.shape={X.shape}, y.shape={y.shape}")
-
-    logger.info("Splitting data (chronological train/val/test)...")
-    # Dynamic split based on data range
-    if year_filter is not None:
-        # For year filter: use percentage split to avoid empty splits
-        n = len(X)
-        train_idx = int(0.7 * n)
-        val_idx = int(0.85 * n)
-        X_train, y_train = X[:train_idx], y[:train_idx]
-        X_val, y_val = X[train_idx:val_idx], y[train_idx:val_idx]
-        X_test, y_test = X[val_idx:], y[val_idx:]
-        ts_train, ts_val, ts_test = (
-            timestamps[:train_idx],
-            timestamps[train_idx:val_idx],
-            timestamps[val_idx:],
-        )
-        logger.info(f"Using percentage split (70/15/15) for year_filter={year_filter}")
-    else:
-        # Full date range: use fixed date splits
-        (
-            X_train,
-            X_val,
-            X_test,
-            y_train,
-            y_val,
-            y_test,
-            ts_train,
-            ts_val,
-            ts_test,
-        ) = split_sequences(X, y, timestamps)
-    logger.info(f"Split sizes: train={len(X_train)}, val={len(X_val)}, test={len(X_test)}")
-
-    # CRITICAL: Scale features AFTER split to prevent data leakage
-    # Fit scaler ONLY on training data, then transform all sets
-    logger.info("Scaling features with RobustScaler (robust to outliers)...")
-    scaler = RobustScaler()
-    # Ensure float32 output to save memory
-    X_train_scaled = scaler.fit_transform(X_train).astype(np.float32)
-    X_val_scaled = scaler.transform(X_val).astype(np.float32)
-    X_test_scaled = scaler.transform(X_test).astype(np.float32)
-    logger.info(f"Feature scaling complete: mean={X_train_scaled.mean():.4f}, std={X_train_scaled.std():.4f}")
-
-    logger.info("Training XGBoost classifier...")
-    model = train_xgb(X_train_scaled, y_train, X_val_scaled, y_val, random_state=random_state)
-
-    logger.info("Evaluating model on test set...")
-    metrics = evaluate(
-        model,
-        X_test_scaled,
-        y_test,
-        min_precision=min_precision,
-        min_trades=min_trades,
-        test_timestamps=ts_test,
-        max_trades_per_day=max_trades_per_day,
+    
+    # ===== STAGE 4: Build sequences =====
+    X, y, timestamps = build_sequences_stage(
+        features=features,
+        targets=targets,
+        df_dates=df.index,
+        window_size=params.window_size,
+        session=params.session,
+        custom_start_hour=params.custom_start_hour,
+        custom_end_hour=params.custom_end_hour,
+        enable_m5_alignment=params.enable_m5_alignment,
+        enable_trend_filter=params.enable_trend_filter,
+        trend_min_dist_sma200=params.trend_min_dist_sma200,
+        trend_min_adx=params.trend_min_adx,
+        enable_pullback_filter=params.enable_pullback_filter,
+        pullback_max_rsi_m5=params.pullback_max_rsi_m5,
+        max_windows=params.max_windows,
     )
-    logger.info(
-        "Metrics: "
-        f"threshold={metrics['threshold']:.2f}, "
-        f"win_rate={metrics['win_rate']:.4f} ({metrics['win_rate']:.2%}), "
-        f"precision={metrics['precision']:.4f}, "
-        f"recall={metrics['recall']:.4f}, "
-        f"f1={metrics['f1']:.4f}, "
-        f"roc_auc={metrics['roc_auc']:.4f}, "
-        f"pr_auc={metrics['pr_auc']:.4f}"
+    
+    # ===== STAGE 5: Split and scale =====
+    (X_train_scaled, X_val_scaled, X_test_scaled,
+     y_train, y_val, y_test,
+     ts_train, ts_val, ts_test,
+     scaler) = split_and_scale_stage(
+        X=X,
+        y=y,
+        timestamps=timestamps,
+        year_filter=params.year_filter,
     )
-
-    logger.info("Saving artifacts...")
-    logger.info("Saving artifacts (model, scaler, metadata)...")
-    save_artifacts(
-        model,
-        scaler,
-        list(features.columns),
-        models_dir,
-        metrics["threshold"],
-        metrics["win_rate"],
-        window_size,
+    
+    # ===== STAGE 6: Train and evaluate =====
+    metrics, model = train_and_evaluate_stage(
+        X_train_scaled=X_train_scaled,
+        y_train=y_train,
+        X_val_scaled=X_val_scaled,
+        y_val=y_val,
+        X_test_scaled=X_test_scaled,
+        y_test=y_test,
+        ts_test=ts_test,
+        random_state=params.random_state,
+        min_precision=params.min_precision,
+        min_trades=params.min_trades,
+        max_trades_per_day=params.max_trades_per_day,
     )
-
+    
+    # ===== STAGE 7: Save artifacts =====
+    save_model_artifacts(
+        model=model,
+        scaler=scaler,
+        feature_columns=list(features.columns),
+        models_dir=models_dir,
+        threshold=metrics["threshold"],
+        win_rate=metrics["win_rate"],
+        window_size=params.window_size,
+    )
+    
     return metrics
 
 
+
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Sequence-based XAU/USD training pipeline")
-    parser.add_argument(
-        "--window-size",
-        type=int,
-        default=60,
-        help="Number of previous candles to use as input (default: 60)",
-    )
-    parser.add_argument(
-        "--atr-multiplier-sl",
-        type=float,
-        default=1.0,
-        help="ATR multiplier for stop-loss level (default: 1.0 - DO NOT CHANGE)",
-    )
-    parser.add_argument(
-        "--atr-multiplier-tp",
-        type=float,
-        default=2.0,
-        help="ATR multiplier for take-profit level (default: 2.0 - DO NOT CHANGE)",
-    )
-    parser.add_argument(
-        "--min-hold-minutes",
-        type=int,
-        default=5,
-        help="Minimum hold time in minutes (default: 5)",
-    )
-    parser.add_argument(
-        "--max-horizon",
-        type=int,
-        default=60,
-        help="Maximum forward candles to simulate (default: 60)",
-    )
-    parser.add_argument(
-        "--random-state",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility (default: 42)",
-    )
-    parser.add_argument(
-        "--years",
-        type=str,
-        default=None,
-        help="Comma-separated years to load (e.g., '2023,2024' for testing)",
-    )
-    parser.add_argument(
-        "--session",
-        type=str,
-        default="london_ny",
-        choices=["london", "ny", "asian", "london_ny", "all", "custom"],
-        help="Trading session to filter data (default: london_ny)",
-    )
-    parser.add_argument(
-        "--custom-start-hour",
-        type=int,
-        default=None,
-        help="Start hour for custom session (0-23)",
-    )
-    parser.add_argument(
-        "--custom-end-hour",
-        type=int,
-        default=None,
-        help="End hour for custom session (0-23)",
-    )
-    parser.add_argument(
-        "--max-windows",
-        type=int,
-        default=200000,
-        help="Maximum number of windows to keep to avoid OOM (default: 200,000)",
-    )
-    parser.add_argument(
-        "--min-precision",
-        type=float,
-        default=0.85,
-        help="Minimum precision (win rate) floor for threshold selection (default: 0.85)",
-    )
-    parser.add_argument(
-        "--min-trades",
-        type=int,
-        default=None,
-        help="Minimum number of predicted positives for a threshold to be considered (default: dynamic)",
-    )
-    parser.add_argument(
-        "--max-trades-per-day",
-        type=int,
-        default=None,
-        help="Cap number of predicted trades per day after thresholding (default: unlimited)",
-    )
-    parser.add_argument(
-        "--skip-m5-alignment",
-        action="store_true",
-        help="Disable M5 alignment filter (default: enabled)",
-    )
-    parser.add_argument(
-        "--disable-trend-filter",
-        action="store_true",
-        help="Disable trend filter requiring price above SMA200 and ADX threshold",
-    )
-    parser.add_argument(
-        "--trend-min-dist-sma200",
-        type=float,
-        default=0.0,
-        help="Minimum normalized distance above SMA200 when trend filter enabled (default: 0.0)",
-    )
-    parser.add_argument(
-        "--trend-min-adx",
-        type=float,
-        default=15.0,
-        help="Minimum ADX when trend filter enabled (default: 15.0)",
-    )
-    parser.add_argument(
-        "--disable-pullback-filter",
-        action="store_true",
-        help="Disable RSI_M5 pullback guard",
-    )
-    parser.add_argument(
-        "--pullback-max-rsi-m5",
-        type=float,
-        default=75.0,
-        help="Maximum RSI_M5 when pullback filter enabled (default: 75.0)",
-    )
-    args = parser.parse_args()
-
-    # Parse year filter
-    year_filter = None
-    if args.years:
-        year_filter = [int(y.strip()) for y in args.years.split(',')]
-
+    # Parse CLI arguments
+    args = parse_cli_arguments()
+    
+    # Parse and validate year filter
+    try:
+        year_filter = parse_and_validate_years(args.years)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    
     # Setup logging to unique file in ml/outputs/logs/
     config = PipelineConfig()
     log_filepath = _setup_logging(config, year_filter)
+    
+    # Create pipeline configuration from CLI args
+    params = PipelineParams.from_cli_args(args)
+    params.year_filter = year_filter
+    
+    # Validate configuration
+    try:
+        params.validate()
+    except ValueError as e:
+        logger.error(f"Configuration validation failed: {e}")
+        print(f"Configuration Error: {e}")
+        sys.exit(1)
     
     # Log training session header with full configuration
     logger.info("\n" + "=" * 80)
@@ -499,47 +298,29 @@ if __name__ == "__main__":
     logger.info(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"Data years: {year_filter if year_filter else 'All available years'}")
     logger.info("\nPipeline Configuration:")
-    logger.info(f"  Window size: {args.window_size} candles")
-    logger.info(f"  ATR SL multiplier: {args.atr_multiplier_sl}x")
-    logger.info(f"  ATR TP multiplier: {args.atr_multiplier_tp}x")
-    logger.info(f"  Min hold time: {args.min_hold_minutes} minutes")
-    logger.info(f"  Max horizon: {args.max_horizon} candles")
-    logger.info(f"  Trading session: {args.session}")
-    logger.info(f"  Min precision threshold: {args.min_precision}")
-    logger.info(f"  M5 alignment filter: {'enabled' if not args.skip_m5_alignment else 'disabled'}")
-    logger.info(f"  Trend filter: {'enabled' if not args.disable_trend_filter else 'disabled'}")
-    logger.info(f"  Pullback filter: {'enabled' if not args.disable_pullback_filter else 'disabled'}")
-    logger.info(f"  Random state: {args.random_state}")
+    logger.info(f"  Feature engineering version: {params.feature_version}")
+    logger.info(f"  Window size: {params.window_size} candles")
+    logger.info(f"  ATR SL multiplier: {params.atr_multiplier_sl}x (OPTION B optimized)")
+    logger.info(f"  ATR TP multiplier: {params.atr_multiplier_tp}x (OPTION B optimized)")
+    logger.info(f"  Min hold time: {params.min_hold_minutes} minutes")
+    logger.info(f"  Max horizon: {params.max_horizon} candles")
+    logger.info(f"  Trading session: {params.session}")
+    logger.info(f"  Min precision threshold: {params.min_precision}")
+    logger.info(f"  M5 alignment filter: {'enabled' if params.enable_m5_alignment else 'disabled'}")
+    logger.info(f"  Trend filter: {'enabled' if params.enable_trend_filter else 'disabled'}")
+    logger.info(f"  Pullback filter: {'enabled' if params.enable_pullback_filter else 'disabled'}")
+    logger.info(f"  Random state: {params.random_state}")
     logger.info("=" * 80 + "\n")
 
     try:
-        metrics = run_pipeline(
-            window_size=args.window_size,        
-            atr_multiplier_sl=args.atr_multiplier_sl,
-            atr_multiplier_tp=args.atr_multiplier_tp,
-            min_hold_minutes=args.min_hold_minutes,
-            max_horizon=args.max_horizon,        
-            random_state=args.random_state,      
-            year_filter=year_filter,
-            session=args.session,
-            custom_start_hour=args.custom_start_hour,
-            custom_end_hour=args.custom_end_hour,
-            max_windows=args.max_windows,
-            min_precision=args.min_precision,
-            min_trades=args.min_trades,
-            max_trades_per_day=args.max_trades_per_day,
-            enable_m5_alignment=not args.skip_m5_alignment,
-            enable_trend_filter=not args.disable_trend_filter,
-            trend_min_dist_sma200=None if args.disable_trend_filter else args.trend_min_dist_sma200,
-            trend_min_adx=None if args.disable_trend_filter else args.trend_min_adx,
-            enable_pullback_filter=not args.disable_pullback_filter,
-            pullback_max_rsi_m5=None if args.disable_pullback_filter else args.pullback_max_rsi_m5,
-        )
+        # Execute pipeline with validated parameters
+        metrics = run_pipeline(params)
 
+        # Print results to console
         print("\n" + "=" * 60)
         print("TRAINING COMPLETE - SEQUENCE PIPELINE")
         print("=" * 60)
-        print(f"Window Size:       {args.window_size} candles")
+        print(f"Window Size:       {params.window_size} candles")
         print(f"Threshold:         {metrics['threshold']:.2f}")
         print(f"WIN RATE:          {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
         print(f"Precision:         {metrics['precision']:.4f}")
@@ -559,7 +340,7 @@ if __name__ == "__main__":
         logger.info("=" * 80)
         logger.info(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info("\nFinal Metrics:")
-        logger.info(f"  Window Size:       {args.window_size} candles")
+        logger.info(f"  Window Size:       {params.window_size} candles")
         logger.info(f"  Threshold:         {metrics['threshold']:.4f}")
         logger.info(f"  WIN RATE:          {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
         logger.info(f"  Precision:         {metrics['precision']:.4f}")
@@ -575,5 +356,9 @@ if __name__ == "__main__":
         logger.error(f"Error: {str(e)}")
         print("Data files not found. Ensure CSVs exist at 'ml/src/data/XAU_1m_data_*.csv'.")
         print(str(e))
+        sys.exit(1)
     except Exception as e:
         logger.error(f"Training pipeline failed: {str(e)}", exc_info=True)
+        print(f"Pipeline Error: {str(e)}")
+        sys.exit(1)
+

@@ -1,14 +1,13 @@
-"""XGBoost classifier training with calibration.
+"""XGBoost classifier training.
 
 This module provides the main training function for the sequence-based
-XAU/USD trading model with class imbalance handling and probability calibration.
+XAU/USD trading model with class imbalance handling.
 """
 
 import logging
 from typing import Tuple
 
 import numpy as np
-from sklearn.calibration import CalibratedClassifierCV
 from xgboost import XGBClassifier
 
 logger = logging.getLogger(__name__)
@@ -20,8 +19,8 @@ def train_xgb(
     X_val: np.ndarray,
     y_val: np.ndarray,
     random_state: int = 42,
-) -> CalibratedClassifierCV:
-    """Train XGBoost classifier with class imbalance handling and calibration.
+) -> XGBClassifier:
+    """Train XGBoost classifier with class imbalance handling.
 
     Args:
         X_train: Training features (n_samples, n_features)
@@ -31,7 +30,7 @@ def train_xgb(
         random_state: Random seed for reproducibility
 
     Returns:
-        CalibratedClassifierCV with sigmoid calibration applied on validation set
+        Trained XGBClassifier with raw probability estimates
 
     Raises:
         ValueError: If labels are not binary {0, 1}
@@ -76,8 +75,4 @@ def train_xgb(
     
     logger.info("Training completed")
 
-    # Calibrate probabilities on validation set
-    calibrated = CalibratedClassifierCV(base, method="sigmoid", cv="prefit")
-    calibrated.fit(X_val, y_val)
-    
-    return calibrated
+    return base

@@ -41,7 +41,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.calibration import CalibratedClassifierCV
+from xgboost import XGBClassifier
 from sklearn.preprocessing import RobustScaler
 
 from ml.src.training import evaluate
@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 def load_model_artifacts(
     models_dir: Path,
-) -> Tuple[CalibratedClassifierCV, RobustScaler, dict]:
+) -> Tuple[XGBClassifier, RobustScaler, dict]:
     """Load trained model, scaler, and metadata from disk.
 
     Args:
@@ -159,7 +159,7 @@ def load_test_data(
 
 
 def evaluate_model(
-    model: CalibratedClassifierCV,
+    model: XGBClassifier,
     scaler: RobustScaler,
     X_test: np.ndarray,
     y_test: np.ndarray,
@@ -170,7 +170,7 @@ def evaluate_model(
     """Evaluate model on test data.
 
     Args:
-        model: Trained calibrated classifier
+        model: Trained classifier
         scaler: Fitted scaler for feature normalization
         X_test: Test features
         y_test: Test labels

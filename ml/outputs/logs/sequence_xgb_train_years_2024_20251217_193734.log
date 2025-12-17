@@ -1,0 +1,63 @@
+2025-12-17 19:37:34 - ml.src.pipeline_config_extended - INFO - Pipeline configuration validated successfully
+2025-12-17 19:37:34 - __main__ - INFO - 
+================================================================================
+2025-12-17 19:37:34 - __main__ - INFO - SEQUENCE XGBoost TRAINING PIPELINE - XAU/USD 1-Minute Data
+2025-12-17 19:37:34 - __main__ - INFO - ================================================================================
+2025-12-17 19:37:34 - __main__ - INFO - Log file: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\logs\sequence_xgb_train_years_2024_20251217_193734.log
+2025-12-17 19:37:34 - __main__ - INFO - Start time: 2025-12-17 19:37:34
+2025-12-17 19:37:34 - __main__ - INFO - Data years: [2024]
+2025-12-17 19:37:34 - __main__ - INFO - 
+Pipeline Configuration:
+2025-12-17 19:37:34 - __main__ - INFO -   Feature engineering version: v2
+2025-12-17 19:37:34 - __main__ - INFO -   Window size: 60 candles
+2025-12-17 19:37:34 - __main__ - INFO -   ATR SL multiplier: 0.1x (OPTION B optimized)
+2025-12-17 19:37:34 - __main__ - INFO -   ATR TP multiplier: 0.2x (OPTION B optimized)
+2025-12-17 19:37:34 - __main__ - INFO -   Min hold time: 5 minutes
+2025-12-17 19:37:34 - __main__ - INFO -   Max horizon: 60 candles
+2025-12-17 19:37:34 - __main__ - INFO -   Trading session: london_ny
+2025-12-17 19:37:34 - __main__ - INFO -   Min precision threshold: 0.85
+2025-12-17 19:37:34 - __main__ - INFO -   M5 alignment filter: disabled
+2025-12-17 19:37:34 - __main__ - INFO -   Trend filter: disabled
+2025-12-17 19:37:34 - __main__ - INFO -   Pullback filter: disabled
+2025-12-17 19:37:34 - __main__ - INFO -   Random state: 42
+2025-12-17 19:37:34 - __main__ - INFO - ================================================================================
+
+2025-12-17 19:37:34 - ml.src.pipeline_stages - INFO - Loading data from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-17 19:37:34 - ml.src.data_loading.loaders - INFO - Year filter applied: loading only [2024]
+2025-12-17 19:37:35 - ml.src.pipeline_stages - INFO - Loaded 355,661 rows from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-17 19:37:35 - ml.src.pipeline_stages - INFO - Date range: 2024-01-02 01:00:00 to 2024-12-31 23:46:00
+2025-12-17 19:37:35 - ml.src.pipeline_stages - INFO - Engineering technical features (version=v2, window_size=60)...
+2025-12-17 19:37:35 - ml.src.features.engineer_v2 - INFO - Engineering features for 355,661 candles (V2 - Multi-TF Focus)...
+2025-12-17 19:37:35 - ml.src.features.engineer_v2 - INFO - Computing M5 features using proper resample aggregation...
+2025-12-17 19:37:35 - ml.src.features.engineer_v2 - INFO - Computing M15 features using proper resample aggregation...
+2025-12-17 19:37:35 - ml.src.features.engineer_v2 - INFO - Computing M60 features using proper resample aggregation...
+2025-12-17 19:37:36 - ml.src.features.engineer_v2 - INFO - Feature engineering V2 complete: 355661 rows × 15 features
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Features shape: (355661, 15)
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Feature columns: 15
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Creating targets (SL=0.1×ATR, TP=0.2×ATR, min_hold=5min, max_horizon=60)
+2025-12-17 19:37:36 - ml.src.targets.target_maker - INFO - Creating targets (SL/TP simulation) for 355,661 candles...
+2025-12-17 19:37:36 - ml.src.targets.target_maker - INFO - Parameters: SL=0.1×ATR, TP=0.2×ATR, min_hold=5min, max_horizon=60min
+2025-12-17 19:37:36 - ml.src.targets.target_maker - INFO - Calculating M1 ATR(14) for SL/TP targets (fallback)
+2025-12-17 19:37:36 - ml.src.targets.target_maker - INFO - Target creation complete: 355,601 valid targets
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Targets shape: 355601
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Positive class (win): 207,791 (58.43%)
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Negative class (loss): 147,810 (41.57%)
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Creating sequences (window_size=60)...
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Filter config: m5=False, trend=False, pullback=False, max_windows=200,000
+2025-12-17 19:37:36 - ml.src.sequences.sequencer - INFO - M5 alignment filter disabled; keeping all timestamps irrespective of minute alignment
+2025-12-17 19:37:36 - ml.src.sequences.sequencer - INFO - Trend filter disabled; not enforcing SMA/ADX conditions
+2025-12-17 19:37:36 - ml.src.sequences.sequencer - INFO - Pullback filter disabled; not constraining RSI_M5
+2025-12-17 19:37:36 - ml.src.sequences.sequencer - INFO - Session filter 'london_ny': keeping 217,237 / 355,542 windows (61.1%)
+2025-12-17 19:37:36 - ml.src.sequences.sequencer - WARNING - Too many windows (217,237) for memory safety. Capping to last 200,000 windows.
+2025-12-17 19:37:36 - ml.src.sequences.sequencer - INFO - After capping: 200,000 windows
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Sequences created: X.shape=(200000, 900), y.shape=(200000,)
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Positive class in sequences: 116,772 (58.39%)
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Splitting data chronologically (train/val/test)...
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Using percentage split (70/15/15) for year_filter=[2024]
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Split sizes: train=140,000, val=30,000, test=30,000
+2025-12-17 19:37:36 - ml.src.pipeline_stages - INFO - Scaling features with RobustScaler (robust to outliers)...
+2025-12-17 19:37:45 - ml.src.pipeline_stages - INFO - Feature scaling complete: mean=-0.3521, std=4.3440
+2025-12-17 19:37:45 - ml.src.pipeline_stages - INFO - Training XGBoost classifier...
+2025-12-17 19:37:45 - ml.src.training.sequence_xgb_trainer - INFO - Class balance (train): pos=82,180, neg=57,820, imbalance_ratio=0.70
+2025-12-17 19:37:45 - ml.src.training.sequence_xgb_trainer - INFO - Applied scale_pos_weight=0.7036 to handle class imbalance
+2025-12-17 19:37:45 - ml.src.training.sequence_xgb_trainer - INFO - Training XGBoost classifier...
