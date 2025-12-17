@@ -1,7 +1,7 @@
 {
-  "threshold": 0.245,
-  "win_rate": 0.4,
-  "window_size": 60,
+  "threshold": 0.32,
+  "win_rate": 0.32653061224489793,
+  "window_size": 14,
   "n_features_per_candle": 57,
-  "total_features": 3420
+  "total_features": 798
 }
