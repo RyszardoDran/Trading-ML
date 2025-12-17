@@ -41,6 +41,7 @@ Usage:
 import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -63,8 +64,60 @@ from ml.src.pipelines.sequence_split import split_sequences
 from ml.src.features import engineer_candle_features
 from ml.src.training import train_xgb, evaluate, save_artifacts
 
+
+def _setup_logging(config: PipelineConfig, year_filter: Optional[List[int]] = None) -> str:
+    """Setup logging to file with unique timestamp-based name.
+    
+    Args:
+        config: PipelineConfig with output directory settings
+        year_filter: List of years being trained (for log name description)
+        
+    Returns:
+        Path to the log file as string
+        
+    Notes:
+        - Log file name includes timestamp: sequence_xgb_train_YYYYMMDD_HHMMSS.log
+        - Creates ml/outputs/logs/ directory if it doesn't exist
+        - Also logs to console (INFO level)
+    """
+    # Create logs directory
+    logs_dir = config.outputs_logs_dir
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate unique log filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    years_suffix = f"_years_{'_'.join(map(str, year_filter))}" if year_filter else "_all_years"
+    log_filename = f"sequence_xgb_train{years_suffix}_{timestamp}.log"
+    log_filepath = logs_dir / log_filename
+    
+    # Configure root logger with both file and console handlers
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    # File handler (detailed logging)
+    file_handler = logging.FileHandler(log_filepath, mode='w', encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    file_handler.setFormatter(file_formatter)
+    root_logger.addHandler(file_handler)
+    
+    # Console handler (INFO level)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    console_handler.setFormatter(console_formatter)
+    root_logger.addHandler(console_handler)
+    
+    return str(log_filepath)
+
+
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def run_pipeline(
@@ -89,33 +142,83 @@ def run_pipeline(
     enable_pullback_filter: bool = True,
     pullback_max_rsi_m5: float | None = 75.0,
 ) -> Dict[str, float]:
-    """Execute end-to-end sequence training pipeline.
+    """Execute end-to-end sequence XGBoost training pipeline for XAU/USD trading.
+
+    **PURPOSE**: Train a calibrated XGBoost classifier on sliding window sequences
+    of 1-minute candlestick data to predict profitable trading opportunities in XAU/USD.
+    
+    **WHAT THIS DOES**:
+    1. Loads historical XAU/USD 1-minute OHLCV data from ml/src/data/
+    2. Engineers 57+ technical features per candle (ATR, RSI, MACD, Bollinger Bands, etc.)
+    3. Creates overlapping sliding windows of N consecutive candles as training sequences
+    4. Assigns binary labels (0=loss, 1=win) based on SL/TP simulation with ATR multiples
+    5. Applies session filters (London/NY hours, trend conditions, pullback guards)
+    6. Splits chronologically into train/val/test sets (no data leakage)
+    7. Trains XGBoost classifier with early stopping on validation set
+    8. Calibrates probability estimates for reliable confidence scoring
+    9. Evaluates on test set and selects optimal decision threshold
+    10. Saves artifacts: model, scaler, feature columns, threshold configuration
+
+    **DATA FLOW**:
+    Raw OHLCV → Feature Engineering → Sequences → Session Filtering → 
+    Train/Val/Test Split → Scaling (no leakage) → XGBoost Training → 
+    Calibration → Threshold Optimization → Evaluation
+
+    **OUTPUTS** (saved to ml/outputs/models/):
+    - sequence_xgb_model.pkl: Calibrated XGBoost classifier
+    - sequence_scaler.pkl: RobustScaler fitted on training features
+    - sequence_feature_columns.json: Ordered list of 57+ feature names
+    - sequence_metadata.json: Training configuration and hyperparameters
+    - sequence_threshold.json: Optimal decision threshold and expected win rate
+
+    **VALIDATION & SAFETY**:
+    - Temporal chronological split (no lookahead bias)
+    - Scaler fit ONLY on training set (prevent leakage)
+    - Early stopping using independent validation set
+    - Win rate (precision) reported on held-out test set
+    - Session filtering removes low-quality trading hours
+    - Trend/pullback guards reduce false signals
 
     Args:
-        window_size: Number of previous candles to use as input (default: 3 - reduced to avoid noise)
-        atr_multiplier_sl: ATR multiplier for stop-loss (default: 1.0 - CONSTANT)
-        atr_multiplier_tp: ATR multiplier for take-profit (default: 2.0 - CONSTANT, 2:1 RR)
-        min_hold_minutes: Minimum hold time in minutes (default: 5)
+        window_size: Number of previous candles to use as input (default: 60)
+        atr_multiplier_sl: ATR multiplier for stop-loss (default: 1.0)
+        atr_multiplier_tp: ATR multiplier for take-profit (default: 2.0 for 2:1 RR)
+        min_hold_minutes: Minimum holding time in minutes (default: 5)
         max_horizon: Maximum forward candles to simulate (default: 60)
-        random_state: Random seed for reproducibility
+        random_state: Random seed for reproducibility (default: 42)
         year_filter: Optional list of years to load (e.g., [2023, 2024] for testing)
-        max_windows: Maximum number of windows to keep (default: 200,000)
-        enable_m5_alignment: Align decisions with M5 candle closes when True
-        enable_trend_filter: Enforce SMA/ADX trend conditions when True
-        trend_min_dist_sma200: Minimum normalized distance above SMA200 when trend
-            filter is active; set to None to disable this component
-        trend_min_adx: Minimum ADX threshold when trend filter is active; set to
-            None to disable this component
-        enable_pullback_filter: Enforce RSI_M5 pullback guard when True
-        pullback_max_rsi_m5: Maximum RSI_M5 allowed when pullback filter is active;
-            set to None to disable the RSI cap
+        max_windows: Maximum number of windows to keep to avoid OOM (default: 200,000)
+        min_precision: Minimum precision (win rate) floor for threshold selection (default: 0.85)
+        min_trades: Minimum number of predicted positives for threshold to be considered
+        max_trades_per_day: Cap number of predicted trades per day after thresholding
+        enable_m5_alignment: Align decisions with M5 candle closes when True (default: True)
+        enable_trend_filter: Enforce SMA200/ADX trend conditions when True (default: True)
+        trend_min_dist_sma200: Minimum normalized distance above SMA200; None to disable
+        trend_min_adx: Minimum ADX threshold for trend filter; None to disable
+        enable_pullback_filter: Enforce RSI_M5 pullback guard when True (default: True)
+        pullback_max_rsi_m5: Maximum RSI_M5 allowed; None to disable
 
     Returns:
-        Dictionary with evaluation metrics including win_rate
+        Dictionary with evaluation metrics:
+        - threshold: Optimal decision threshold (0-1)
+        - win_rate: Precision on test set (expected win rate)
+        - precision: Precision (TP / (TP + FP))
+        - recall: Recall (TP / (TP + FN))
+        - f1: F1 score
+        - roc_auc: Area under ROC curve
+        - pr_auc: Area under Precision-Recall curve
+        - confusion_matrix: [TN, FP, FN, TP]
+        - n_positive_predictions: Count of predicted positives at threshold
 
     Raises:
-        FileNotFoundError: If data files not found
+        FileNotFoundError: If data files not found at ml/src/data/
         ValueError: On validation failures or insufficient data
+        
+    Notes:
+        - THIS IS CRITICAL PRODUCTION TRAINING CODE
+        - All hyperparameters, feature engineering, and filters are NOT random
+        - Random seeds fixed for reproducibility (seeded model, scaler, splits)
+        - Results logged to ml/outputs/logs/sequence_xgb_train_*.log with timestamp
     """
     np.random.seed(random_state)
     import random
@@ -384,6 +487,31 @@ if __name__ == "__main__":
     if args.years:
         year_filter = [int(y.strip()) for y in args.years.split(',')]
 
+    # Setup logging to unique file in ml/outputs/logs/
+    config = PipelineConfig()
+    log_filepath = _setup_logging(config, year_filter)
+    
+    # Log training session header with full configuration
+    logger.info("\n" + "=" * 80)
+    logger.info("SEQUENCE XGBoost TRAINING PIPELINE - XAU/USD 1-Minute Data")
+    logger.info("=" * 80)
+    logger.info(f"Log file: {log_filepath}")
+    logger.info(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"Data years: {year_filter if year_filter else 'All available years'}")
+    logger.info("\nPipeline Configuration:")
+    logger.info(f"  Window size: {args.window_size} candles")
+    logger.info(f"  ATR SL multiplier: {args.atr_multiplier_sl}x")
+    logger.info(f"  ATR TP multiplier: {args.atr_multiplier_tp}x")
+    logger.info(f"  Min hold time: {args.min_hold_minutes} minutes")
+    logger.info(f"  Max horizon: {args.max_horizon} candles")
+    logger.info(f"  Trading session: {args.session}")
+    logger.info(f"  Min precision threshold: {args.min_precision}")
+    logger.info(f"  M5 alignment filter: {'enabled' if not args.skip_m5_alignment else 'disabled'}")
+    logger.info(f"  Trend filter: {'enabled' if not args.disable_trend_filter else 'disabled'}")
+    logger.info(f"  Pullback filter: {'enabled' if not args.disable_pullback_filter else 'disabled'}")
+    logger.info(f"  Random state: {args.random_state}")
+    logger.info("=" * 80 + "\n")
+
     try:
         metrics = run_pipeline(
             window_size=args.window_size,        
@@ -422,11 +550,30 @@ if __name__ == "__main__":
         print("=" * 60)
         print(f"\nWin rate is the precision: when model predicts 'BUY',")
         print(f"it will be correct {metrics['win_rate']:.2%} of the time on test data.")
+        print(f"\nLog file saved to: {log_filepath}")
         print("=" * 60)
         
+        # Log completion summary to file
+        logger.info("\n" + "=" * 80)
+        logger.info("TRAINING COMPLETE - SUMMARY")
+        logger.info("=" * 80)
+        logger.info(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("\nFinal Metrics:")
+        logger.info(f"  Window Size:       {args.window_size} candles")
+        logger.info(f"  Threshold:         {metrics['threshold']:.4f}")
+        logger.info(f"  WIN RATE:          {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
+        logger.info(f"  Precision:         {metrics['precision']:.4f}")
+        logger.info(f"  Recall:            {metrics['recall']:.4f}")
+        logger.info(f"  F1 Score:          {metrics['f1']:.4f}")
+        logger.info(f"  ROC-AUC:           {metrics['roc_auc']:.4f}")
+        logger.info(f"  PR-AUC:            {metrics['pr_auc']:.4f}")
+        logger.info(f"\nArtifacts saved to: {config.outputs_models_dir}")
+        logger.info("=" * 80)
+        
     except FileNotFoundError as e:
+        logger.error("Data files not found. Ensure CSVs exist at 'ml/src/data/XAU_1m_data_*.csv'.")
+        logger.error(f"Error: {str(e)}")
         print("Data files not found. Ensure CSVs exist at 'ml/src/data/XAU_1m_data_*.csv'.")
         print(str(e))
     except Exception as e:
-        print("Training pipeline failed:", str(e))
-        raise
+        logger.error(f"Training pipeline failed: {str(e)}", exc_info=True)

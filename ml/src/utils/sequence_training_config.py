@@ -13,6 +13,12 @@ Example:
 from dataclasses import dataclass
 from pathlib import Path
 
+# Get absolute path to ml/ directory
+_config_file = Path(__file__)
+_utils_dir = _config_file.parent
+_src_dir = _utils_dir.parent
+_ml_dir = _src_dir.parent
+
 
 @dataclass
 class PipelineConfig:
@@ -30,10 +36,10 @@ class PipelineConfig:
         random_state: Random seed for reproducibility
     """
     
-    # Paths (relative to ml/ directory)
-    data_dir: Path = Path("src/data")
-    models_dir: Path = Path("src/models")
-    outputs_dir: Path = Path("outputs")
+    # Paths (absolute, relative to ml/ directory)
+    data_dir: Path = _ml_dir / "src" / "data"
+    models_dir: Path = _ml_dir / "src" / "models"
+    outputs_dir: Path = _ml_dir / "outputs"
     
     # Thresholds and parameters
     window_size: int = 60
@@ -49,11 +55,22 @@ class PipelineConfig:
     enable_trend_filter: bool = True
     enable_pullback_filter: bool = True
     
-    def __post_init__(self) -> None:
-        """Convert string paths to Path objects if needed."""
-        if isinstance(self.data_dir, str):
-            object.__setattr__(self, "data_dir", Path(self.data_dir))
-        if isinstance(self.models_dir, str):
-            object.__setattr__(self, "models_dir", Path(self.models_dir))
-        if isinstance(self.outputs_dir, str):
-            object.__setattr__(self, "outputs_dir", Path(self.outputs_dir))
+    @property
+    def outputs_logs_dir(self) -> Path:
+        """Directory for training logs."""
+        return self.outputs_dir / "logs"
+    
+    @property
+    def outputs_models_dir(self) -> Path:
+        """Directory for trained models."""
+        return self.outputs_dir / "models"
+    
+    @property
+    def outputs_metrics_dir(self) -> Path:
+        """Directory for metrics and evaluation results."""
+        return self.outputs_dir / "metrics"
+    
+    @property
+    def outputs_analysis_dir(self) -> Path:
+        """Directory for analysis (feature importance, etc.)."""
+        return self.outputs_dir / "analysis"
