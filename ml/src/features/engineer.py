@@ -56,6 +56,7 @@ from ml.src.features.indicators import (
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)  # Suppress INFO logs during backtesting
 
 
 def _resample_ohlcv(df: pd.DataFrame, freq: str) -> pd.DataFrame:
@@ -353,10 +354,10 @@ def engineer_candle_features(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"Engineering features for {len(df):,} candles (Multi-Timeframe Focus)...")
     
     # Extract M1 price series with validation
-    close = df["Close"].astype(np.float32).clip(lower=1e-9)
-    high = df["High"].astype(np.float32).clip(lower=1e-9)
-    low = df["Low"].astype(np.float32).clip(lower=1e-9)
-    volume = df["Volume"].astype(np.float32).clip(lower=1e-9)
+    close = df["Close"].astype(np.float32).replace(0, 1e-9)
+    high = df["High"].astype(np.float32).replace(0, 1e-9)
+    low = df["Low"].astype(np.float32).replace(0, 1e-9)
+    volume = df["Volume"].astype(np.float32).replace(0, 1e-9)
     
     # M1 ATR for normalization
     atr_14 = compute_atr(high, low, close, period=14)

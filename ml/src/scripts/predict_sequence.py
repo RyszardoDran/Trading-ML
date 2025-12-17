@@ -37,7 +37,12 @@ import pandas as pd
 # Add src to path to allow imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from pipelines.sequence_training_pipeline import engineer_candle_features
+from features.engineer import engineer_candle_features
+
+# Suppress sklearn version warnings
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
+warnings.filterwarnings('ignore', category=InconsistentVersionWarning)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -125,6 +130,7 @@ def validate_input_candles(df: pd.DataFrame, required_size: int) -> None:
 def predict(
     candles: pd.DataFrame,
     models_dir: Path,
+    artifacts: Optional[Dict] = None,  # NEW: optional pre-loaded artifacts
 ) -> Dict[str, float]:
     """Predict probability and win rate from 100 candles.
 
@@ -146,8 +152,10 @@ def predict(
         ValueError: On input validation failures
         FileNotFoundError: If model artifacts not found
     """
-    # Load model and metadata
-    artifacts = load_model_artifacts(models_dir)
+    # Load model and metadata (or use pre-loaded)
+    if artifacts is None:
+        artifacts = load_model_artifacts(models_dir)
+    
     model = artifacts["model"]
     feature_columns = artifacts["feature_columns"]
     threshold = artifacts["threshold"]
@@ -158,12 +166,18 @@ def predict(
     if scaler is None:
         raise ValueError("Scaler artifact missing; retrain pipeline to regenerate artifacts")
 
-    # Validate input
-    validate_input_candles(candles, window_size)
+    # Validate input (basic checks only for performance)
+    if len(candles) != window_size:
+        raise ValueError(f"Expected {window_size} candles, got {len(candles)}")
+    
+    required_cols = {"Open", "High", "Low", "Close", "Volume"}
+    missing = required_cols - set(candles.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
 
-    # Engineer features
-    logger.info("Engineering features...")
-    features = engineer_candle_features(candles, window_size=window_size)
+    # Engineer features (suppress repeated INFO logs)
+    logger.debug("Engineering features...")
+    features = engineer_candle_features(candles)
     
     if len(features) != window_size:
         raise ValueError(f"Feature engineering produced {len(features)} rows, expected {window_size}")
@@ -183,7 +197,7 @@ def predict(
         last_adx = features["adx"].iloc[-1]
         
         if last_dist <= 0:
-            logger.warning(f"Trend Filter: Price is below SMA200 (dist={last_dist:.4f}). Prediction forced to 0.")
+            logger.debug(f"Trend Filter: dist_sma_200={last_dist:.4f} (filtered)")
             return {
                 "probability": 0.0,
                 "prediction": 0,
@@ -192,7 +206,7 @@ def predict(
                 "confidence": "low (trend filter)",
             }
         if last_adx <= 15:
-            logger.warning(f"Trend Filter: ADX is too low (adx={last_adx:.2f}). Prediction forced to 0.")
+            logger.debug(f"Trend Filter: ADX={last_adx:.2f} (filtered)")
             return {
                 "probability": 0.0,
                 "prediction": 0,
@@ -204,7 +218,7 @@ def predict(
     if "rsi_m5" in features.columns:
         last_rsi = features["rsi_m5"].iloc[-1]
         if last_rsi >= 75:
-            logger.warning(f"Pullback Filter: RSI_M5 is too high (rsi={last_rsi:.2f}). Prediction forced to 0.")
+            logger.debug(f"Pullback Filter: RSI_M5={last_rsi:.2f} (filtered)")
             return {
                 "probability": 0.0,
                 "prediction": 0,
