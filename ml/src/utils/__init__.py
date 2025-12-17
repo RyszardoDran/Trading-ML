@@ -1,10 +1,11 @@
-"""Utility functions module.
+"""Utility functions and configuration module.
 
 Purpose:
-    Helper functions for data processing, logging, and analysis.
-
-Note:
-    This module will be populated as needed.
+    Helper functions and configuration for data processing, logging, and analysis.
 """
 
-__all__ = []
+from ml.src.utils.sequence_training_config import PipelineConfig
+
+__all__ = [
+    "PipelineConfig",
+]

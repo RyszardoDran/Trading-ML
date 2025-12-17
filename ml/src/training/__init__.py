@@ -1,0 +1,33 @@
+"""Training module for sequence-based XAU/USD trading model.
+
+This module contains functions for training and evaluating XGBoost classifiers:
+- train_xgb: Train calibrated XGBoost classifier with class imbalance handling
+- evaluate: Comprehensive evaluation with win-rate focused metrics
+- analyze_feature_importance: Feature importance analysis
+- save_artifacts: Model serialization and persistence
+
+Example:
+    from ml.src.training import train_xgb, evaluate
+    
+    model = train_xgb(X_train, y_train, X_val, y_val)
+    metrics = evaluate(model, X_test, y_test)
+"""
+
+from ml.src.training.sequence_xgb_trainer import train_xgb
+from ml.src.training.sequence_evaluation import evaluate
+from ml.src.training.sequence_feature_analysis import analyze_feature_importance
+from ml.src.training.sequence_artifacts import save_artifacts
+
+__all__ = [
+    "train_xgb",
+    "evaluate",
+    "analyze_feature_importance",
+    "save_artifacts",
+]
+
+__all__ = [
+    "train_xgb",
+    "evaluate",
+    "analyze_feature_importance",
+    "save_artifacts",
+]

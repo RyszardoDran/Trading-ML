@@ -1,12 +1,13 @@
-"""Central pipeline configuration.
+"""Sequence-based training pipeline configuration.
 
 Purpose:
-    Define default paths, thresholds, and parameters for the training pipeline.
+    Define default paths, thresholds, and parameters specific to the sequence training pipeline
+    for XAU/USD trading model.
 
 Example:
     >>> config = PipelineConfig()
     >>> print(config.models_dir)
-    >>> print(config.data_dir)
+    >>> print(config.window_size)
 """
 
 from dataclasses import dataclass
