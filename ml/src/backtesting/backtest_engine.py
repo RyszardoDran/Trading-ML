@@ -122,20 +122,26 @@ class BacktestEngine:
         # Validate inputs
         self._validate_inputs(predictions, prices, targets)
         
-        # Align data
-        predictions, prices, targets = self._align_data(predictions, prices, targets)
+        # Store full M1 prices for accurate SL/TP detection
+        self.full_prices = prices.copy()
+        
+        # Align predictions with prices (predictions may be M5, prices M1)
+        # We only take price rows that match prediction timestamps for iteration
+        predictions_aligned = predictions.copy()
+        prices_aligned = prices.loc[predictions.index] if not prices.index.equals(predictions.index) else prices.copy()
         
         logger.info(f"Backtest period: {prices.index[0]} to {prices.index[-1]}")
-        logger.info(f"Total data points: {len(prices):,}")
+        logger.info(f"Total M1 candles: {len(prices):,}")
+        logger.info(f"Prediction points (M5): {len(predictions):,}")
         logger.info(f"Signals with prediction=1: {(predictions['prediction']==1).sum():,}")
         
         # Run backtest
         if self.config.walk_forward_enabled:
             logger.info("Running walk-forward analysis...")
-            trades, equity = self._run_walk_forward(predictions, prices, targets)
+            trades, equity = self._run_walk_forward(predictions_aligned, prices_aligned, targets)
         else:
             logger.info("Running simple backtest...")
-            trades, equity = self._run_simple_backtest(predictions, prices, targets)
+            trades, equity = self._run_simple_backtest(predictions_aligned, prices_aligned, targets)
         
         # Store results
         self.trades = trades
@@ -287,6 +293,9 @@ class BacktestEngine:
         trades_today = 0
         current_date = None
         
+        # Track active trade (realistic trading - one position at a time)
+        active_trade_exit_time = None
+        
         for i in range(len(predictions)):
             timestamp = predictions.index[i]
             pred_row = predictions.iloc[i]
@@ -296,6 +305,10 @@ class BacktestEngine:
             if current_date is None or timestamp.date() != current_date:
                 trades_today = 0
                 current_date = timestamp.date()
+            
+            # Skip if we have an active trade (realistic trading)
+            if active_trade_exit_time is not None and timestamp < active_trade_exit_time:
+                continue
             
             # Check if we should take this trade
             should_trade = (
@@ -324,8 +337,8 @@ class BacktestEngine:
                 # Get ATR value for SL/TP calculation
                 atr_value = pred_row.get('atr', None)
                 
-                # Get future prices for exit simulation
-                future_prices = prices.iloc[i:min(i+self.config.max_horizon_minutes+1, len(prices))]
+                # Get ALL M1 candles from this point forward (accurate SL/TP detection)
+                future_prices = self.full_prices.loc[timestamp:]
                 
                 # Execute trade
                 trade_result = self._execute_trade(
@@ -338,9 +351,14 @@ class BacktestEngine:
                     actual_outcome=targets.iloc[i] if targets is not None else None,
                 )
                 
-                trades_list.append(trade_result)
-                capital += trade_result['pnl']
-                trades_today += 1
+                # Skip trades that didn't hit SL/TP in available data
+                if trade_result is not None:
+                    trades_list.append(trade_result)
+                    capital += trade_result['pnl']
+                    trades_today += 1
+                    
+                    # Mark this trade as active until its exit time
+                    active_trade_exit_time = trade_result['exit_time']
             
             # Record equity
             equity.append(capital)
@@ -399,31 +417,46 @@ class BacktestEngine:
             for idx in range(1, len(future_prices)):
                 candle = future_prices.iloc[idx]
                 
-                # Check if SL hit
-                if candle['Low'] <= sl_price:
+                sl_hit = candle['Low'] <= sl_price
+                tp_hit = candle['High'] >= tp_price
+                
+                # If both hit in same candle, determine which was hit first
+                if sl_hit and tp_hit:
+                    # Check candle direction: if opened closer to TP, assume TP hit first
+                    open_price = candle['Open']
+                    dist_to_tp = abs(open_price - tp_price)
+                    dist_to_sl = abs(open_price - sl_price)
+                    
+                    if dist_to_tp < dist_to_sl:
+                        # TP closer to open, likely hit first
+                        exit_time = future_prices.index[idx]
+                        exit_price = tp_price
+                        is_win = True
+                    else:
+                        # SL closer to open, likely hit first
+                        exit_time = future_prices.index[idx]
+                        exit_price = sl_price
+                        is_win = False
+                    break
+                
+                # Only SL hit
+                elif sl_hit:
                     exit_time = future_prices.index[idx]
                     exit_price = sl_price
                     is_win = False
                     break
                 
-                # Check if TP hit
-                if candle['High'] >= tp_price:
+                # Only TP hit
+                elif tp_hit:
                     exit_time = future_prices.index[idx]
                     exit_price = tp_price
                     is_win = True
                     break
         
-        # If no exit found in future prices, use actual outcome or simulate
+        # If no exit found in available data, skip this trade (incomplete data)
         if exit_time is None:
-            exit_time = timestamp + pd.Timedelta(minutes=self.config.max_horizon_minutes)
-            
-            if actual_outcome is not None:
-                is_win = (actual_outcome == 1)
-            else:
-                # Simulate based on probability
-                is_win = (np.random.random() < probability)
-            
-            exit_price = tp_price if is_win else sl_price
+            # Return None to signal this trade should be skipped
+            return None
         
         # Calculate PnL based on actual exit
         gross_pnl = position_size * (exit_price - entry_price)

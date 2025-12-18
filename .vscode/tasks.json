@@ -1,15 +1,29 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "read_file",
-			"type": "shell",
-			"command": "cat",
-			"args": [
-				"ml/src/pipelines/sequence_training_pipeline.py"
-			],
-			"isBackground": false,
-			"group": "read"
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/backend/TradingML.ModelPrediction/TradingML.ModelPrediction.csproj"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+		// 	{
+		// 	"label": "read_file",
+		// 	"type": "shell",
+		// 	"command": "cat",
+		// 	"args": [
+		// 		"ml/src/pipelines/sequence_training_pipeline.py"
+		// 	],
+		// 	"isBackground": false,
+		// 	"group": "read"
+		// }
+  ]
 }

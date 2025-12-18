@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>TradingML.ModelPrediction</RootNamespace>
+    <AssemblyName>TradingML.ModelPrediction</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Version>1.0.0</Version>
+    <Description>Console application for ML model prediction on XAU/USD candles</Description>
+    <Authors>Trading ML Team</Authors>
+  </PropertyGroup>
+
+  <!-- Dependencies for ML model inference -->
+  <ItemGroup>
+    <!-- XGBoost.NET for model loading (optional - comment if not available) -->
+    <!-- <PackageReference Include="XGBoost.Net" Version="2.0.0" /> -->
+    
+    <!-- For JSON serialization -->
+    <PackageReference Include="System.Text.Json" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

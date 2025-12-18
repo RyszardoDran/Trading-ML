@@ -27,6 +27,7 @@ def save_artifacts(
     threshold: float,
     win_rate: float,
     window_size: int,
+    analysis_window_days: int = 7,
 ) -> None:
     """Save trained model, scaler, and metadata to disk.
 
@@ -45,18 +46,24 @@ def save_artifacts(
         threshold: Selected classification threshold for binary decision
         win_rate: Expected win rate (precision on test set)
         window_size: Number of candles in each input window
+        analysis_window_days: Days of historical data recommended for indicator calculation (default 7)
 
     Raises:
         IOError: If unable to write to models_dir
         
+    Notes:
+        - analysis_window_days is CRITICAL for production inference
+        - 7 days = ~10,080 M1 candles, sufficient for SMA200, sessions, MTF indicators
+        - Model uses last window_size candles, but features calculated on full window
+        
     Example:
         >>> save_artifacts(model, scaler, features, Path('ml/src/models'),
-        ...                threshold=0.65, win_rate=0.87, window_size=100)
+        ...                threshold=0.65, win_rate=0.87, window_size=100, analysis_window_days=7)
         # Saves:
         # - ml/src/models/sequence_xgb_model.pkl
         # - ml/src/models/sequence_scaler.pkl
         # - ml/src/models/sequence_feature_columns.json
-        # - ml/src/models/sequence_threshold.json
+        # - ml/src/models/sequence_threshold.json (includes analysis_window_days)
         # - ml/src/models/sequence_feature_importance.json
     """
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -81,12 +88,15 @@ def save_artifacts(
         "threshold": threshold,
         "win_rate": win_rate,
         "window_size": window_size,
+        "analysis_window_days": analysis_window_days,
         "n_features_per_candle": len(feature_cols),
         "total_features": len(feature_cols) * window_size,
+        "recommended_min_candles": window_size + 200,  # Conservative: window + SMA200
+        "recommended_analysis_candles": analysis_window_days * 24 * 60,  # Days to M1 candles
     }
     with open(models_dir / "sequence_threshold.json", "w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
-    logger.info("Saved metadata to sequence_threshold.json")
+    logger.info(f"Saved metadata to sequence_threshold.json (analysis_window={analysis_window_days} days)")
     
     # Analyze and save feature importance
     logger.info("Analyzing feature importance...")

@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": ".NET Launch (TradingML.ModelPrediction)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/backend/TradingML.ModelPrediction/bin/Debug/net10.0/TradingML.ModelPrediction.dll",
+      "args": [
+        "--candles-file",
+        "${workspaceFolder}/backend/TradingML.ModelPrediction/Data/XAU_1m_data_2025.csv",
+        "--output",
+        "${workspaceFolder}/ml/outputs/prediction_2025.json"
+      ],
+      "cwd": "${workspaceFolder}/backend/TradingML.ModelPrediction",
+      "console": "integratedTerminal",
+      "stopAtEntry": false
+    }
+  ]
+}

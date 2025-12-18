@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+"""M5 (5-minute) feature engineering for trading strategy.
+
+**PURPOSE**: Generate features DIRECTLY on M5 timeframe instead of M1.
+This matches the trading strategy which operates on 5-minute candles.
+
+**KEY DIFFERENCE FROM engineer.py**:
+- engineer.py: M1 candles with M5 indicators forward-filled
+- engineer_m5.py: M5 candles with M5 indicators (THIS FILE)
+
+**PROCESS**:
+1. Load M1 raw data (e.g., 7 days = ~10,080 M1 candles)
+2. Aggregate to M5 (10,080 / 5 = ~2,016 M5 candles)
+3. Calculate features on M5 bars
+4. Return M5 DataFrame (NOT M1!)
+
+**USAGE**:
+    from ml.src.features.engineer_m5 import engineer_m5_candle_features
+    
+    # Load 7 days of M1 data
+    df_m1 = load_data(days=7)  # ~10,080 M1 candles
+    
+    # Engineer features on M5
+    features_m5 = engineer_m5_candle_features(df_m1)  # ~2,016 M5 candles
+    
+    # Create sequences from M5 features
+    X, y = create_sequences(features_m5, window_size=100)  # 100 M5 candles
+
+**INPUTS**:
+    - DataFrame with DatetimeIndex and columns: [Open, High, Low, Close, Volume]
+    - M1 frequency (will be aggregated to M5)
+    
+**OUTPUTS**:
+    - DataFrame with M5 features (1 row per 5-minute bar)
+    - Includes: RSI, BB position, SMA distance, MACD, Stochastic, ATR, etc.
+"""
+
+import logging
+import numpy as np
+import pandas as pd
+
+from ml.src.features.indicators import (
+    compute_rsi, compute_stochastic, compute_macd, 
+    compute_adx, compute_bollinger_bands, compute_atr
+)
+
+logger = logging.getLogger(__name__)
+
+
+def aggregate_to_m5(df_m1: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate M1 OHLCV data to M5 (5-minute) bars.
+    
+    **PURPOSE**: Convert high-frequency M1 data into M5 timeframe
+    for strategy that operates on 5-minute candles.
+    
+    **AGGREGATION RULES**:
+    - Open: First value in 5-minute period
+    - High: Maximum value in 5-minute period
+    - Low: Minimum value in 5-minute period
+    - Close: Last value in 5-minute period
+    - Volume: Sum of volume in 5-minute period
+    
+    Args:
+        df_m1: M1 DataFrame with DatetimeIndex and [Open, High, Low, Close, Volume]
+        
+    Returns:
+        M5 DataFrame with aggregated OHLCV data
+        
+    Raises:
+        ValueError: If required columns are missing
+        
+    Notes:
+        - Drops any incomplete 5-minute bars at the end
+        - Result is ~1/5 the size of input (10,080 M1 → 2,016 M5)
+        
+    Examples:
+        >>> df_m1 = load_data(days=7)  # 10,080 M1 candles
+        >>> df_m5 = aggregate_to_m5(df_m1)
+        >>> len(df_m5)
+        2016  # ~10,080 / 5
+    """
+    required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+    missing_cols = set(required_cols) - set(df_m1.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {missing_cols}")
+    
+    logger.info(f"Aggregating {len(df_m1)} M1 candles to M5...")
+    
+    # Aggregation dictionary
+    agg_dict = {
+        'Open': 'first',
+        'High': 'max',
+        'Low': 'min',
+        'Close': 'last',
+        'Volume': 'sum'
+    }
+    
+    # Resample to 5-minute bars
+    df_m5 = df_m1[required_cols].resample('5min').agg(agg_dict)
+    
+    # Drop incomplete bars (last bar may be incomplete)
+    df_m5 = df_m5.dropna()
+    
+    logger.info(f"Aggregated to {len(df_m5)} M5 candles ({len(df_m1)/len(df_m5):.1f}x compression)")
+    
+    return df_m5
+
+
+def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
+    """Engineer features directly on M5 (5-minute) candles.
+    
+    **PURPOSE**: Generate trading features on M5 timeframe to match
+    strategy that operates on 5-minute candles.
+    
+    **PROCESS**:
+    1. Aggregate M1 → M5 (5-minute bars)
+    2. Calculate technical indicators on M5
+    3. Calculate multi-timeframe context (M15, M60) from M5
+    4. Return M5 DataFrame with features
+    
+    **FEATURES** (~15 total):
+    - M5 Primary: RSI, BB position, SMA distance, Stochastic, MACD, ATR
+    - M15 Context: RSI, BB position, SMA distance (from M5)
+    - M60 Context: RSI, BB position (from M5)
+    - Returns and volatility
+    
+    Args:
+        df_m1: M1 DataFrame with [Open, High, Low, Close, Volume]
+        
+    Returns:
+        M5 DataFrame with engineered features (1 row per 5-minute bar)
+        
+    Raises:
+        ValueError: If input data is insufficient or invalid
+        
+    Notes:
+        - Requires sufficient M1 data for indicator warmup (recommend 7 days)
+        - Output is ~1/5 size of input (10,080 M1 → 2,016 M5)
+        - All features calculated on M5 timeframe (no forward-fill from M1)
+        - Multi-timeframe indicators (M15, M60) resampled from M5
+        
+    Examples:
+        >>> # Load 7 days of M1 data
+        >>> df_m1 = load_data(days=7)
+        >>> len(df_m1)
+        10080
+        
+        >>> # Engineer M5 features
+        >>> features_m5 = engineer_m5_candle_features(df_m1)
+        >>> len(features_m5)
+        2016  # ~10,080 / 5
+        
+        >>> # Create 100-candle sequences (100 × 5min = 500 minutes)
+        >>> X, y = create_sequences(features_m5, window_size=100)
+    """
+    logger.info("Engineering M5 features...")
+    
+    # Step 1: Aggregate M1 → M5
+    df_m5 = aggregate_to_m5(df_m1)
+    
+    if len(df_m5) < 200:
+        raise ValueError(f"Insufficient M5 data: need at least 200 bars, got {len(df_m5)}")
+    
+    # Extract M5 price series
+    close = df_m5["Close"].astype(np.float32).clip(lower=1e-9)
+    high = df_m5["High"].astype(np.float32).clip(lower=1e-9)
+    low = df_m5["Low"].astype(np.float32).clip(lower=1e-9)
+    
+    # ========== M5 Primary Features ==========
+    logger.info("Computing M5 primary features...")
+    
+    # ATR (14-period on M5 = 70 minutes)
+    atr_14 = compute_atr(high, low, close, period=14)
+    atr_norm = atr_14 / atr_14.rolling(14, min_periods=1).mean()
+    
+    # RSI (14-period on M5)
+    rsi_14 = compute_rsi(close, period=14)
+    
+    # Bollinger Bands (20-period on M5 = 100 minutes)
+    bb_upper, bb_sma, bb_lower = compute_bollinger_bands(close, period=20, num_std=2)
+    bb_position = (close - bb_lower) / (bb_upper - bb_lower + 1e-9)
+    
+    # SMA distance (20-period on M5)
+    sma_20 = close.rolling(20, min_periods=1).mean()
+    dist_sma_20 = (close - sma_20) / (atr_14 + 1e-9)
+    
+    # Stochastic (14-period on M5)
+    stoch_k, stoch_d = compute_stochastic(high, low, close, period=14, smooth_k=3, smooth_d=3)
+    
+    # MACD on M5
+    macd_line, macd_signal, macd_hist = compute_macd(close, fast=12, slow=26, signal=9)
+    macd_hist_norm = macd_hist / (atr_14 + 1e-9)
+    
+    # ADX (14-period on M5) - returns tuple (adx, plus_di, minus_di)
+    adx, _, _ = compute_adx(high, low, close, period=14)
+    
+    # SMA 200 (200-period on M5 = 1000 minutes = 16.7 hours)
+    sma_200 = close.rolling(200, min_periods=1).mean()
+    dist_sma_200 = (close - sma_200) / (atr_14 + 1e-9)
+    
+    # Returns on M5
+    ret_1 = close.pct_change().fillna(0)
+    
+    # ========== M15 Context (from M5) ==========
+    logger.info("Computing M15 context from M5...")
+    
+    # Resample M5 → M15 (every 3 M5 bars = 1 M15 bar)
+    df_m15 = df_m5.resample('15min').agg({
+        'Open': 'first',
+        'High': 'max',
+        'Low': 'min',
+        'Close': 'last',
+        'Volume': 'sum'
+    }).dropna()
+    
+    close_m15 = df_m15["Close"].astype(np.float32).clip(lower=1e-9)
+    high_m15 = df_m15["High"].astype(np.float32).clip(lower=1e-9)
+    low_m15 = df_m15["Low"].astype(np.float32).clip(lower=1e-9)
+    
+    # M15 indicators
+    atr_m15 = compute_atr(high_m15, low_m15, close_m15, period=14)
+    rsi_m15 = compute_rsi(close_m15, period=14)
+    bb_upper_m15, bb_sma_m15, bb_lower_m15 = compute_bollinger_bands(close_m15, period=20, num_std=2)
+    bb_pos_m15 = (close_m15 - bb_lower_m15) / (bb_upper_m15 - bb_lower_m15 + 1e-9)
+    sma_20_m15 = close_m15.rolling(20, min_periods=1).mean()
+    dist_sma_20_m15 = (close_m15 - sma_20_m15) / (atr_m15 + 1e-9)
+    
+    # Align M15 to M5 index (forward-fill)
+    rsi_m15 = rsi_m15.reindex(df_m5.index, method='ffill').fillna(50)
+    bb_pos_m15 = bb_pos_m15.reindex(df_m5.index, method='ffill').fillna(0.5)
+    dist_sma_20_m15 = dist_sma_20_m15.reindex(df_m5.index, method='ffill').fillna(0)
+    
+    # ========== M60 Context (from M5) ==========
+    logger.info("Computing M60 context from M5...")
+    
+    # Resample M5 → M60 (every 12 M5 bars = 1 M60 bar)
+    df_m60 = df_m5.resample('1h').agg({
+        'Open': 'first',
+        'High': 'max',
+        'Low': 'min',
+        'Close': 'last',
+        'Volume': 'sum'
+    }).dropna()
+    
+    close_m60 = df_m60["Close"].astype(np.float32).clip(lower=1e-9)
+    high_m60 = df_m60["High"].astype(np.float32).clip(lower=1e-9)
+    low_m60 = df_m60["Low"].astype(np.float32).clip(lower=1e-9)
+    
+    # M60 indicators
+    rsi_m60 = compute_rsi(close_m60, period=14)
+    bb_upper_m60, bb_sma_m60, bb_lower_m60 = compute_bollinger_bands(close_m60, period=20, num_std=2)
+    bb_pos_m60 = (close_m60 - bb_lower_m60) / (bb_upper_m60 - bb_lower_m60 + 1e-9)
+    
+    # Align M60 to M5 index (forward-fill)
+    rsi_m60 = rsi_m60.reindex(df_m5.index, method='ffill').fillna(50)
+    bb_pos_m60 = bb_pos_m60.reindex(df_m5.index, method='ffill').fillna(0.5)
+    
+    # ========== Create M5 Features DataFrame ==========
+    features_m5 = pd.DataFrame(
+        {
+            # M5 Primary (calculated on M5 bars)
+            "rsi_m5": rsi_14.fillna(50),
+            "bb_pos_m5": bb_position.fillna(0.5),
+            "dist_sma_20_m5": dist_sma_20.fillna(0),
+            "stoch_k_m5": stoch_k.fillna(50),
+            "stoch_d_m5": stoch_d.fillna(50),
+            "macd_hist_m5": macd_hist_norm.fillna(0),
+            "atr_norm_m5": atr_norm.fillna(1.0),
+            "adx": adx.fillna(20),
+            "dist_sma_200": dist_sma_200.fillna(0),
+            "ret_1_m5": ret_1.fillna(0),
+            
+            # M15 Context
+            "rsi_m15": rsi_m15,
+            "bb_pos_m15": bb_pos_m15,
+            "dist_sma_20_m15": dist_sma_20_m15,
+            
+            # M60 Context
+            "rsi_m60": rsi_m60,
+            "bb_pos_m60": bb_pos_m60,
+        },
+        index=df_m5.index,
+    )
+    
+    # Clean NaN and inf values
+    features_m5.replace([np.inf, -np.inf], np.nan, inplace=True)
+    features_m5 = features_m5.ffill().bfill().fillna(0)
+    
+    # Final validation
+    if features_m5.empty:
+        raise ValueError("M5 feature matrix is empty")
+    
+    if features_m5.isnull().any().any():
+        raise ValueError("M5 feature matrix contains NaN after cleaning")
+    
+    logger.info(f"M5 feature engineering complete: {features_m5.shape[0]} rows × {features_m5.shape[1]} features")
+    logger.info(f"Timeframe: M5 (5-minute candles)")
+    logger.info(f"Date range: {features_m5.index.min()} to {features_m5.index.max()}")
+    
+    return features_m5

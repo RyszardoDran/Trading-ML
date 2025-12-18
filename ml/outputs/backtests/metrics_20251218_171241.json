@@ -1,0 +1,17 @@
+{
+  "total_return": -0.008020625,
+  "annualized_return": -0.03149926261108771,
+  "sharpe_ratio": -102.47903490785713,
+  "sortino_ratio": -1260.0669882144732,
+  "calmar_ratio": -3.989034592861786,
+  "max_drawdown": 0.008023431858524475,
+  "max_drawdown_peak": "2023-01-03 15:59:00",
+  "max_drawdown_trough": "2023-12-28 07:50:00",
+  "volatility": 0.0007514292782554239,
+  "var_95": 0,
+  "cvar_95": 3.667191678733261e-07,
+  "total_trades": 1136,
+  "win_rate": 0.5193661971830986,
+  "profit_factor": 0.09025049209594727,
+  "avg_win_loss_ratio": 0.08351994305849075
+}

@@ -188,15 +188,22 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
     data_dir = config.data_dir
     models_dir = config.outputs_models_dir
     
-    # ===== STAGE 1: Load data =====
-    df = load_and_prepare_data(data_dir, year_filter=params.year_filter)
+    # ===== STAGE 1: Load M1 data =====
+    df_m1 = load_and_prepare_data(data_dir, year_filter=params.year_filter)
     
-    # ===== STAGE 2: Engineer features =====
-    features = engineer_features_stage(df, window_size=params.window_size, feature_version=params.feature_version)
+    # ===== STAGE 2: Engineer features (M1→M5 aggregation + feature engineering) =====
+    # Returns: (features_m5, df_m5) where df_m5 is aggregated M5 OHLCV for target creation
+    # Note: engineer_features_stage now internally aggregates M1→M5 and returns M5 features
+    features = engineer_features_stage(df_m1, window_size=params.window_size, feature_version=params.feature_version)
     
-    # ===== STAGE 3: Create targets =====
+    # CRITICAL: Get M5 aggregated data for target creation
+    # We need to re-aggregate M1→M5 for make_target() to work on M5 timeframe
+    from ml.src.features.engineer_m5 import aggregate_to_m5
+    df_m5 = aggregate_to_m5(df_m1)
+    
+    # ===== STAGE 3: Create targets on M5 timeframe =====
     targets = create_targets_stage(
-        df,
+        df_m5,  # Use M5 aggregated data
         features,
         atr_multiplier_sl=params.atr_multiplier_sl,
         atr_multiplier_tp=params.atr_multiplier_tp,
@@ -204,11 +211,11 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         max_horizon=params.max_horizon,
     )
     
-    # ===== STAGE 4: Build sequences =====
+    # ===== STAGE 4: Build sequences on M5 timeframe =====
     X, y, timestamps = build_sequences_stage(
         features=features,
         targets=targets,
-        df_dates=df.index,
+        df_dates=df_m5.index,  # Use M5 datetime index
         window_size=params.window_size,
         session=params.session,
         custom_start_hour=params.custom_start_hour,
@@ -257,6 +264,7 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         threshold=metrics["threshold"],
         win_rate=metrics["win_rate"],
         window_size=params.window_size,
+        analysis_window_days=7,  # Recommend 7 days for robust indicator calculation
     )
     
     return metrics

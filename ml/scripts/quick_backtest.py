@@ -33,7 +33,8 @@ import datetime as _dt
 from ml.src.backtesting import BacktestEngine, BacktestConfig
 from ml.src.backtesting.position_sizer import PositionSizingMethod
 from ml.src.data_loading import load_all_years
-from ml.src.scripts.predict_sequence import load_model_artifacts, predict
+from ml.src.scripts.predict_sequence import load_model_artifacts
+from ml.src.features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
 from ml.src.utils import PipelineConfig
 
 print("=" * 80)
@@ -95,106 +96,157 @@ models_dir = config_obj.outputs_models_dir
 
 # Load 2023 data
 print("\n[1/4] Loading 2023 data...")
-prices = load_all_years(data_dir, year_filter=[2023])
-print(f"Loaded {len(prices):,} candles from 2023")
-print(f"Period: {prices.index[0]} to {prices.index[-1]}")
+prices_all = load_all_years(data_dir, year_filter=[2023])
+print(f"Loaded {len(prices_all):,} candles from 2023")
+print(f"Period: {prices_all.index[0]} to {prices_all.index[-1]}")
 
-# Take first DAY only (for speed)
-
-# Take first DAY only (for speed) OR apply user day/session filters
-print("\n[2/4] Extracting day(s) and applying filters...")
+# Extract target period for backtesting
+print("\n[2/4] Extracting target period and preparing context...")
 if args.days:
     tokens = _parse_days_arg(args.days)
-    # Separate date tokens from weekday tokens
     date_tokens = [t for t in tokens if not _is_weekday_token(t)]
     weekday_tokens = [t for t in tokens if _is_weekday_token(t)]
 
-    selected = prices
-    # Filter by explicit dates if provided
+    selected = prices_all
     dates_list = _parse_date_tokens(date_tokens)
     if dates_list:
-        masks = [((prices.index.date) == d) for d in dates_list]
+        masks = [((prices_all.index.date) == d) for d in dates_list]
         if masks:
             combined = masks[0]
             for m in masks[1:]:
                 combined = combined | m
             selected = selected[combined]
 
-    # Filter by weekdays if provided (Mon,Tue,...)
     if weekday_tokens:
         wk_map = {'mon':0,'tue':1,'wed':2,'thu':3,'fri':4,'sat':5,'sun':6}
         wk_nums = {wk_map[t[:3].lower()] for t in weekday_tokens}
         selected = selected[selected.index.weekday.isin(wk_nums)]
 
-    week_prices = selected
-    if week_prices.empty:
+    target_period = selected
+    if target_period.empty:
         print("No data matched --days filter; exiting.")
         raise SystemExit(1)
 else:
-    # Default behaviour: use the very first calendar day in the dataset
-    start_date = prices.index[0]
+    # Default: first calendar day
+    start_date = prices_all.index[0]
     end_date = start_date + pd.Timedelta(days=1)
-    week_prices = prices[(prices.index >= start_date) & (prices.index < end_date)]
+    target_period = prices_all[(prices_all.index >= start_date) & (prices_all.index < end_date)]
 
-print(f"Day(s) span: {week_prices.index[0]} to {week_prices.index[-1]}")
-print(f"Samples: {len(week_prices):,} candles")
+print(f"Target period: {target_period.index[0]} to {target_period.index[-1]}")
+print(f"Target samples: {len(target_period):,} M1 candles")
 
-# Apply session filter (if any)
+# Apply session filter to target period
 if args.session and args.session != 'all':
-    before = len(week_prices)
-    week_prices = filter_by_session(week_prices, args.session)
-    after = len(week_prices)
+    before = len(target_period)
+    target_period = filter_by_session(target_period, args.session)
+    after = len(target_period)
     print(f"Applied session='{args.session}': {before:,} -> {after:,} candles")
 
-# Load model ONCE (not in loop!)
-print("\n[3/4] Loading model...")
+# Calculate required lookback for M5 context (need 260 M5 = ~1300 M1 = ~1 day)
+# Add 2 days of M1 data before target period for safety
+lookback_days = 2
+target_start = target_period.index[0]
+context_start = target_start - pd.Timedelta(days=lookback_days)
+
+print(f"\nAdding {lookback_days} days of M1 context for M5 warmup...")
+print(f"  Context starts: {context_start}")
+print(f"  Target starts: {target_start}")
+
+# Extract M1 data with context (context + target)
+prices_with_context = prices_all[(prices_all.index >= context_start) & (prices_all.index <= target_period.index[-1])]
+print(f"Total M1 candles with context: {len(prices_with_context):,}")
+
+# Load model ONCE
+print("\n[3/4] Loading model and preparing M5 data...")
 artifacts = load_model_artifacts(models_dir)
-window_size = artifacts['window_size']
-print(f"Model window size: {window_size}")
+model = artifacts['model']
+scaler = artifacts['scaler']
+window_size_m5 = artifacts['window_size']
+threshold = artifacts['threshold']
+print(f"Model window size: {window_size_m5} M5 candles")
+print(f"Decision threshold: {threshold:.4f}")
 
-# Generate predictions
-print(f"\n[4/4] Generating predictions for {len(week_prices)-window_size:,} windows...")
+# Aggregate M1→M5 ONCE (with context)
+print(f"\nAggregating M1 → M5 (with context)...")
+m5_data = aggregate_to_m5(prices_with_context)
+print(f"✅ Aggregated to {len(m5_data):,} M5 candles ({len(prices_with_context)/len(m5_data):.1f}x compression)")
+
+# Engineer M5 features ONCE
+print(f"Engineering M5 features...")
+m5_features = engineer_m5_candle_features(m5_data)
+print(f"✅ Engineered {len(m5_features):,} M5 rows × {m5_features.shape[1]} features")
+
+# Calculate minimum M5 candles needed
+min_m5_candles = window_size_m5 + 200
+print(f"\nMinimum M5 candles: {min_m5_candles} ({window_size_m5} window + 200 warmup)")
+
+if len(m5_features) < min_m5_candles:
+    print(f"\n❌ ERROR: Insufficient M5 data even with context!")
+    print(f"  Need: {min_m5_candles} M5 candles")
+    print(f"  Got: {len(m5_features)} M5 candles")
+    print(f"  Try selecting more days or removing session filter")
+    sys.exit(1)
+
+# Generate predictions for TARGET PERIOD ONLY
+print(f"\n[4/4] Generating predictions for target period...")
+print(f"  Target: {target_period.index[0]} to {target_period.index[-1]}")
+
 predictions_list = []
-error_count = 0
-last_error = None
 
-total = len(week_prices) - window_size
-for i in range(window_size, len(week_prices)):
+# Find M5 indices corresponding to target period
+target_start_ts = target_period.index[0]
+target_end_ts = target_period.index[-1]
+
+# Get M5 timestamps that fall within target period
+m5_target_mask = (m5_data.index >= target_start_ts) & (m5_data.index <= target_end_ts)
+m5_target_indices = np.where(m5_target_mask)[0]
+
+print(f"  Target M5 candles: {len(m5_target_indices):,}")
+print(f"  Predictions to generate: {len(m5_target_indices):,}")
+
+total = len(m5_target_indices)
+for idx, i in enumerate(m5_target_indices):
     # Progress indicator (every 10%)
-    if i % max(total // 10, 1) == 0 or i == window_size:
-        progress = int(100 * (i - window_size) / total)
-        print(f"  Progress: {progress}% ({i-window_size}/{total})")
+    if idx % max(total // 10, 1) == 0 or idx == 0:
+        progress = int(100 * idx / total)
+        print(f"  Progress: {progress}% ({idx}/{total})")
     
-    window_data = week_prices.iloc[i-window_size:i]
+    # Need full context before this M5 candle
+    if i < min_m5_candles:
+        continue  # Skip if not enough warmup
     
-    try:
-        # Pass pre-loaded artifacts to avoid reloading model each time
-        result = predict(window_data, models_dir, artifacts=artifacts)
-        
-        # Calculate ATR from last candle for SL/TP
-        atr_value = window_data['atr_14'].iloc[-1] if 'atr_14' in window_data.columns else None
-        
-        predictions_list.append({
-            'timestamp': week_prices.index[i],
-            'probability': result['probability'],
-            'prediction': result['prediction'],
-            'threshold': result['threshold'],
-            'atr': atr_value,
-        })
-    except Exception as e:
-        error_count += 1
-        last_error = str(e)
-        if error_count == 1:
-            # Print first error for debugging
-            print(f"\n⚠️  First prediction error at index {i}: {e}")
-            print(f"Window data shape: {window_data.shape}")
-            print(f"Window columns: {window_data.columns.tolist()}")
+    # Extract window of M5 features
+    feature_window = m5_features.iloc[i-window_size_m5:i]
+    
+    # Flatten to 1D (model expects flattened sequence: 60 M5 × 15 features = 900)
+    X = feature_window.values.flatten().reshape(1, -1)
+    
+    # Scale features
+    X = scaler.transform(X)
+    
+    # Predict
+    proba = model.predict_proba(X)[0, 1]
+    prediction = 1 if proba >= threshold else 0
+    
+    # Map back to M1 timestamp (last M1 candle of this M5 candle)
+    m5_timestamp = m5_data.index[i]
+    
+    # Find corresponding M1 timestamp in target_period
+    m1_matches = target_period[target_period.index <= m5_timestamp]
+    if len(m1_matches) == 0:
         continue
+    m1_timestamp = m1_matches.index[-1]
+    
+    predictions_list.append({
+        'timestamp': m1_timestamp,
+        'probability': proba,
+        'prediction': prediction,
+        'threshold': threshold,
+        'atr': None,
+    })
 
 if len(predictions_list) == 0:
     print(f"\n❌ ERROR: No predictions generated!")
-    print(f"Total errors: {error_count}")
-    print(f"Last error: {last_error}")
     sys.exit(1)
 
 predictions_df = pd.DataFrame(predictions_list)
@@ -204,21 +256,38 @@ print(f"\n✅ Generated {len(predictions_df):,} predictions")
 print(f"\nBUY signals: {(predictions_df['prediction']==1).sum():,}")
 print(f"HOLD signals: {(predictions_df['prediction']==0).sum():,}")
 
-# Run backtest
+# Keep FULL M1 data for accurate SL/TP detection
+print(f"\nPreparing data for backtest...")
+print(f"  Predictions: {len(predictions_df):,} M5 timestamps")
+print(f"  Full M1 data: {len(target_period):,} candles (for SL/TP detection)")
+
+# Run backtest with M5 predictions but M1 price resolution
 print("\nRunning backtest engine...")
 config = BacktestConfig(
     initial_capital=100000,
     position_sizing=PositionSizingMethod.FIXED,
-    fixed_position_size=0.3,  # Increased from 0.1 to 0.3 lots (need ~3x profit to beat costs)
-    spread_pips=0.5,
-    slippage_pips=0.3,
-    min_probability=0.5,
+    fixed_position_size=0.3,
+    spread_pips=1.03,  # Only spread cost
+    slippage_pips=0.0,  # No slippage
+    commission=0.0,  # No commission
+    min_probability=threshold,  # Use same threshold as model
+    atr_sl_multiplier=0.2,  # Same as training!
+    atr_tp_multiplier=0.4,  # Same as training!
+    # No max_horizon - check all available data like real trading
     save_trades=True,
     save_equity_curve=True,
 )
 
+print(f"Backtest config:")
+print(f"  Threshold: {threshold:.4f}")
+print(f"  Position size: {config.fixed_position_size} lots")
+print(f"  SL: {config.atr_sl_multiplier} ATR")
+print(f"  TP: {config.atr_tp_multiplier} ATR")
+print(f"  Max horizon: {config.max_horizon_minutes} minutes")
+
 engine = BacktestEngine(config)
-results = engine.run(predictions_df, week_prices)
+# Pass predictions (M5) and full M1 prices for accurate exit detection
+results = engine.run(predictions_df, target_period)
 
 # Display results
 print("\n" + "=" * 80)

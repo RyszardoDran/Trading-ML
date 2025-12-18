@@ -32,7 +32,7 @@ import pandas as pd
 from sklearn.preprocessing import RobustScaler
 
 from ml.src.data_loading import load_all_years
-from ml.src.features import engineer_candle_features
+from ml.src.features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
 from ml.src.pipelines.sequence_split import split_sequences
 from ml.src.sequences import SequenceFilterConfig, create_sequences
 from ml.src.targets import make_target
@@ -92,33 +92,39 @@ def engineer_features_stage(
     window_size: int,
     feature_version: str = "v2",
 ) -> pd.DataFrame:
-    """Engineer technical features for each candle.
+    """Engineer technical features on M5 timeframe.
     
-    **PURPOSE**: Create technical indicators for each candlestick.
-    Uses multi-timeframe features (M5, M15, M60 context) for superior
-    predictive power.
+    **PURPOSE**: Aggregate M1 data to M5 bars, then engineer technical
+    indicators on true M5 timeframe. This provides proper multi-timeframe
+    context (M5→M15→M60) for superior predictive power.
+    
+    **ARCHITECTURE**: M1 raw → M5 aggregation → M5 features → M15/M60 context
+    - 10,080 M1 candles (7 days) → 2,016 M5 candles
+    - Model sees 100 true M5 candles = 500 minutes context (vs 100 M1 = 100 min)
     
     Args:
-        df: Raw OHLCV DataFrame with datetime index
+        df: Raw M1 OHLCV DataFrame with datetime index
         window_size: (Deprecated) Kept for backward compatibility with config
-        feature_version: (Deprecated) Always uses multi-timeframe version
+        feature_version: (Deprecated) Always uses M5 aggregation version
         
     Returns:
-        DataFrame with 15 engineered features. Same index as input df.
+        DataFrame with 15 engineered features on M5 timeframe.
+        Index is M5-aligned (timestamps ending at :00, :05, :10, :15, etc.)
         
     Raises:
         ValueError: If df is empty
         
     Notes:
-        - Features are aligned to input df index
+        - **CRITICAL**: Aggregates M1→M5 first, then calculates indicators
+        - Features are on true M5 bars (proper OHLCV aggregation)
+        - Multi-timeframe: M5→M15 (3:1), M5→M60 (12:1)
         - NaN values cleaned automatically (ffill + fillna(0))
-        - All features are numerical (float32)
-        - Multi-timeframe features have 2.1x stronger correlation than M1-only
+        - Compression: ~5x fewer candles (10,080 M1 → 2,016 M5)
         
     Examples:
-        >>> features = engineer_features_stage(df, window_size=60)
+        >>> features = engineer_features_stage(df_m1, window_size=60)
         >>> features.shape
-        (1234567, 15)  # 15 features
+        (2016, 15)  # 15 features on M5 timeframe (5x compression)
     """
     if len(df) == 0:
         raise ValueError("Cannot engineer features on empty DataFrame")
@@ -129,10 +135,15 @@ def engineer_features_stage(
     if feature_version != "v2":
         logger.warning(f"feature_version parameter is deprecated and ignored (passed: {feature_version})")
     
-    logger.info(f"Engineering technical features (multi-timeframe)...")
+    logger.info(f"Aggregating M1 data to M5 timeframe...")
     
-    # Use multi-timeframe feature engineering
-    features = engineer_candle_features(df)
+    # Step 1: Aggregate M1 → M5 (proper OHLCV aggregation)
+    df_m5 = aggregate_to_m5(df)
+    logger.info(f"Aggregated {len(df):,} M1 candles → {len(df_m5):,} M5 candles ({len(df_m5)/len(df)*100:.1f}% compression)")
+    
+    # Step 2: Engineer features on M5 timeframe
+    logger.info(f"Engineering technical features on M5 timeframe (with M15/M60 context)...")
+    features = engineer_m5_candle_features(df_m5)
     
     logger.info(f"Features shape: {features.shape}")
     logger.info(f"Feature columns: {len(features.columns)}")
@@ -141,26 +152,30 @@ def engineer_features_stage(
 
 
 def create_targets_stage(
-    df: pd.DataFrame,
+    df_m5: pd.DataFrame,
     features: pd.DataFrame,
     atr_multiplier_sl: float,
     atr_multiplier_tp: float,
     min_hold_minutes: int,
     max_horizon: int,
 ) -> pd.Series:
-    """Create binary target labels based on SL/TP simulation.
+    """Create binary target labels based on SL/TP simulation on M5 timeframe.
     
     **PURPOSE**: Simulate trading positions with ATR-based SL/TP levels.
     Assign binary labels: 1=position would be profitable (TP hit first),
     0=position would lose (SL hit first).
     
+    **IMPORTANT**: Operates on M5 timeframe data (aggregated bars).
+    - min_hold_minutes on M5: min_hold_minutes=5 means 1 M5 candle (5 minutes)
+    - max_horizon on M5: max_horizon=60 means 60 M5 candles (300 minutes = 5 hours)
+    
     Args:
-        df: Raw OHLCV DataFrame with datetime index
-        features: Engineered features (used only to align index)
+        df_m5: M5 OHLCV DataFrame with datetime index (aggregated from M1)
+        features: Engineered features on M5 timeframe (used only to align index)
         atr_multiplier_sl: ATR multiplier for stop-loss distance
         atr_multiplier_tp: ATR multiplier for take-profit distance
-        min_hold_minutes: Minimum time to hold position (candles)
-        max_horizon: Maximum forward candles to simulate
+        min_hold_minutes: Minimum M5 candles to hold position (1 candle = 5 minutes)
+        max_horizon: Maximum forward M5 candles to simulate (1 candle = 5 minutes)
         
     Returns:
         Series with binary labels (0/1) aligned to features index
@@ -172,21 +187,23 @@ def create_targets_stage(
         - Labels are 0/1 only (binary classification)
         - Forward simulation ensures no lookahead bias
         - Class imbalance is logged for awareness
+        - **TIME SCALE**: All parameters are in M5 candle units (not minutes)
         
     Examples:
-        >>> targets = create_targets_stage(df, features, 1.0, 2.0, 5, 60)
+        >>> targets = create_targets_stage(df_m5, features, 1.0, 2.0, 1, 60)
+        >>> # min_hold=1 M5 candle (5 min), max_horizon=60 M5 candles (300 min)
         >>> targets.sum()  # Number of positive examples
         12345
         >>> targets.mean()  # Class balance
         0.35
     """
     logger.info(
-        f"Creating targets (SL={atr_multiplier_sl}×ATR, TP={atr_multiplier_tp}×ATR, "
-        f"min_hold={min_hold_minutes}min, max_horizon={max_horizon})"
+        f"Creating targets on M5 timeframe (SL={atr_multiplier_sl}×ATR, TP={atr_multiplier_tp}×ATR, "
+        f"min_hold={min_hold_minutes} M5 candles, max_horizon={max_horizon} M5 candles)"
     )
     
-    # Use df aligned to features index
-    df_aligned = df.loc[features.index]
+    # Use df_m5 aligned to features index
+    df_aligned = df_m5.loc[features.index]
     targets = make_target(
         df_aligned,
         atr_multiplier_sl=atr_multiplier_sl,
@@ -218,21 +235,25 @@ def build_sequences_stage(
     pullback_max_rsi_m5: Optional[float],
     max_windows: int,
 ) -> Tuple[np.ndarray, np.ndarray, pd.DatetimeIndex]:
-    """Create sliding window sequences and apply filters.
+    """Create sliding window sequences on M5 timeframe and apply filters.
     
-    **PURPOSE**: Convert individual candles into overlapping sliding windows
+    **PURPOSE**: Convert M5 candles into overlapping sliding windows
     of N consecutive candles. Apply session, trend, and pullback filters
     to reduce low-quality signals.
     
+    **IMPORTANT**: Data is already on M5 timeframe (aggregated bars).
+    - window_size=100 means 100 M5 candles = 500 minutes of context
+    - M5 alignment filter is DISABLED (data already M5-aligned)
+    
     Args:
-        features: Engineered features DataFrame
-        targets: Binary target labels Series
-        df_dates: Original datetime index (used for filtering)
-        window_size: Number of candles per sequence
+        features: Engineered features on M5 timeframe
+        targets: Binary target labels on M5 timeframe
+        df_dates: M5 datetime index (used for session filtering)
+        window_size: Number of M5 candles per sequence (default 100 = 500 min)
         session: Trading session filter ('london', 'ny', 'london_ny', etc.)
         custom_start_hour: Start hour for custom session (0-23)
         custom_end_hour: End hour for custom session (0-23)
-        enable_m5_alignment: Align to M5 candle closes
+        enable_m5_alignment: (Deprecated - always disabled for M5 data)
         enable_trend_filter: Enforce trend conditions
         trend_min_dist_sma200: Min distance above SMA200
         trend_min_adx: Min ADX threshold
@@ -244,22 +265,23 @@ def build_sequences_stage(
         Tuple of:
         - X: Sequence features (n_sequences, n_features*window_size)
         - y: Sequence targets (n_sequences,)
-        - timestamps: Datetime index for each sequence (n_sequences,)
+        - timestamps: M5 datetime index for each sequence (n_sequences,)
         
     Raises:
         ValueError: If window_size >= len(features) or parameters invalid
         
     Notes:
         - Sequences are flattened to 2D array for XGBoost
-        - Timestamps are for the last candle in each sequence
+        - Timestamps are for the last M5 candle in each sequence
         - Filtering may reduce sequences significantly
+        - M5 alignment filter is DISABLED (data already M5-aligned)
         
     Examples:
         >>> X, y, ts = build_sequences_stage(features, targets, df_dates, ...)
         >>> X.shape
-        (100000, 57*60)  # 100k sequences, 57 features × 60 candles
+        (20000, 15*100)  # 20k sequences, 15 features × 100 M5 candles
         >>> y.sum()
-        35000
+        7000
     """
     if window_size < 1:
         raise ValueError(f"window_size must be >= 1, got {window_size}")
@@ -269,10 +291,15 @@ def build_sequences_stage(
             f"window_size ({window_size}) must be < len(features) ({len(features)})"
         )
     
-    logger.info(f"Creating sequences (window_size={window_size})...")
+    logger.info(f"Creating sequences on M5 timeframe (window_size={window_size} M5 candles = {window_size*5} minutes)...")
+    
+    # CRITICAL: Disable M5 alignment filter - data is already M5-aligned
+    if enable_m5_alignment:
+        logger.warning("M5 alignment filter is DISABLED for M5 data (data already M5-aligned)")
+        enable_m5_alignment = False
     
     filter_config = SequenceFilterConfig(
-        enable_m5_alignment=enable_m5_alignment,
+        enable_m5_alignment=False,  # Always False for M5 data
         enable_trend_filter=enable_trend_filter,
         trend_min_dist_sma200=trend_min_dist_sma200,
         trend_min_adx=trend_min_adx,
@@ -281,7 +308,7 @@ def build_sequences_stage(
     )
     
     logger.info(
-        f"Filter config: m5={enable_m5_alignment}, trend={enable_trend_filter}, "
+        f"Filter config: m5_alignment=False (already M5), trend={enable_trend_filter}, "
         f"pullback={enable_pullback_filter}, max_windows={max_windows:,}"
     )
     
@@ -473,6 +500,7 @@ def save_model_artifacts(
     threshold: float,
     win_rate: float,
     window_size: int,
+    analysis_window_days: int = 7,
 ) -> None:
     """Save trained model and artifacts to disk.
     
@@ -487,6 +515,7 @@ def save_model_artifacts(
         threshold: Selected decision threshold
         win_rate: Expected win rate (precision on test)
         window_size: Sequence window size
+        analysis_window_days: Days of historical data for indicator calculation (default 7)
         
     Raises:
         PermissionError: If models_dir not writable
@@ -495,7 +524,8 @@ def save_model_artifacts(
         - Saves 5 files: model.pkl, scaler.pkl, feature_columns.json,
           threshold.json, metadata.json
         - All files prefixed with 'sequence_' for clarity
-        - Metadata includes window_size for inference consistency
+        - Metadata includes analysis_window_days for proper inference setup
+        - 7 days = ~10,080 M1 candles for robust indicator calculation
     """
     logger.info("Saving artifacts...")
     save_artifacts(
@@ -506,5 +536,6 @@ def save_model_artifacts(
         threshold,
         win_rate,
         window_size,
+        analysis_window_days,
     )
     logger.info(f"Artifacts saved to {models_dir}")

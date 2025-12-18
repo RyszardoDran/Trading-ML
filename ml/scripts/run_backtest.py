@@ -40,7 +40,8 @@ from ml.src.backtesting import BacktestEngine
 from ml.src.backtesting.config import BacktestConfig
 from ml.src.backtesting.position_sizer import PositionSizingMethod
 from ml.src.data_loading import load_all_years
-from ml.src.scripts.predict_sequence import load_model_artifacts, predict
+from ml.src.scripts.predict_sequence import load_model_artifacts
+from ml.src.features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
 from ml.src.utils import PipelineConfig
 
 # Setup logging
@@ -202,7 +203,10 @@ def load_data_and_predict(
     models_dir: Path,
     year_filter: Optional[list[int]] = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load data and generate predictions.
+    """Load data and generate predictions using optimized M5 approach.
+    
+    Optimization: Aggregate M1→M5 once at start, then slide window over M5.
+    This is O(n) instead of O(n × window_size).
     
     Args:
         data_dir: Directory with OHLCV data
@@ -213,66 +217,108 @@ def load_data_and_predict(
         Tuple of (predictions DataFrame, prices DataFrame)
     """
     logger.info("=" * 80)
-    logger.info("LOADING DATA AND GENERATING PREDICTIONS")
+    logger.info("OPTIMIZED M5 BACKTEST - LOAD DATA AND PREDICT")
     logger.info("=" * 80)
     
-    # Load price data
-    logger.info(f"Loading price data from: {data_dir}")
+    # Load M1 price data
+    logger.info(f"Loading M1 price data from: {data_dir}")
     if year_filter:
         logger.info(f"  Years: {year_filter}")
     
-    prices = load_all_years(data_dir, year_filter=year_filter)
-    logger.info(f"Loaded {len(prices):,} candles")
-    logger.info(f"Period: {prices.index[0]} to {prices.index[-1]}")
+    m1_prices = load_all_years(data_dir, year_filter=year_filter)
+    logger.info(f"Loaded {len(m1_prices):,} M1 candles")
+    logger.info(f"Period: {m1_prices.index[0]} to {m1_prices.index[-1]}")
     
-    # Load model
+    # Load model artifacts
     logger.info(f"\nLoading model from: {models_dir}")
     artifacts = load_model_artifacts(models_dir)
-    window_size = artifacts['window_size']
-    logger.info(f"Model window size: {window_size}")
+    model = artifacts['model']
+    scaler = artifacts['scaler']
+    window_size_m5 = artifacts['window_size']
+    threshold = artifacts['threshold']
     
-    # Generate predictions for all data
-    logger.info(f"\nGenerating predictions...")
+    logger.info(f"Model window size: {window_size_m5} M5 candles")
+    logger.info(f"Decision threshold: {threshold:.4f}")
+    
+    # OPTIMIZATION: Aggregate M1→M5 ONCE at the start
+    logger.info(f"\n{'='*80}")
+    logger.info("AGGREGATING M1 → M5 (ONE-TIME OPERATION)")
+    logger.info(f"{'='*80}")
+    m5_data = aggregate_to_m5(m1_prices)
+    logger.info(f"✅ Aggregated to {len(m5_data):,} M5 candles ({len(m1_prices)/len(m5_data):.1f}x compression)")
+    
+    # OPTIMIZATION: Engineer M5 features ONCE at the start
+    logger.info(f"\n{'='*80}")
+    logger.info("ENGINEERING M5 FEATURES (ONE-TIME OPERATION)")
+    logger.info(f"{'='*80}")
+    m5_features = engineer_m5_candle_features(m5_data)
+    logger.info(f"✅ Engineered {len(m5_features):,} M5 rows × {m5_features.shape[1]} features")
+    
+    # Verify alignment
+    if len(m5_features) != len(m5_data):
+        raise ValueError(f"M5 features/data length mismatch: {len(m5_features)} vs {len(m5_data)}")
+    
+    # Calculate minimum M5 candles needed (window + warmup for indicators)
+    min_m5_candles = window_size_m5 + 200  # 60 + 200 for SMA200
+    logger.info(f"\nMinimum M5 candles: {min_m5_candles} ({window_size_m5} window + 200 warmup)")
+    
+    if len(m5_features) < min_m5_candles:
+        raise ValueError(f"Insufficient M5 data: {len(m5_features)} < {min_m5_candles}")
+    
+    # Generate predictions by sliding window over M5 sequences
+    logger.info(f"\n{'='*80}")
+    logger.info("GENERATING PREDICTIONS (SLIDING WINDOW OVER M5)")
+    logger.info(f"{'='*80}")
     
     predictions_list = []
     
-    # Process in chunks to avoid memory issues
-    chunk_size = 10000
-    for start_idx in range(window_size, len(prices), chunk_size):
-        end_idx = min(start_idx + chunk_size, len(prices))
+    # Slide window over M5 data
+    for i in range(min_m5_candles, len(m5_features)):
+        # Extract window of M5 features
+        feature_window = m5_features.iloc[i-window_size_m5:i]
         
-        for i in range(start_idx, end_idx):
-            # Get last window_size candles
-            window_data = prices.iloc[i-window_size:i]
-            
-            if len(window_data) < window_size:
-                continue
-            
-            # Predict
-            try:
-                result = predict(window_data, models_dir)
-                
-                predictions_list.append({
-                    'timestamp': prices.index[i],
-                    'probability': result['probability'],
-                    'prediction': result['prediction'],
-                    'threshold': result['threshold'],
-                })
-            except Exception as e:
-                logger.warning(f"Prediction failed at {prices.index[i]}: {e}")
-                continue
+        # Flatten to 1D (model expects flattened sequence: 60 M5 × 15 features = 900)
+        X = feature_window.values.flatten().reshape(1, -1)
         
-        if (end_idx - window_size) % 50000 == 0:
-            logger.info(f"  Processed {end_idx - window_size:,} / {len(prices) - window_size:,} predictions")
+        # Scale features
+        X = scaler.transform(X)
+        
+        # Predict
+        proba = model.predict_proba(X)[0, 1]
+        prediction = 1 if proba >= threshold else 0
+        
+        # Map back to M1 timestamp (last M1 candle of this M5 candle)
+        m5_timestamp = m5_data.index[i]
+        
+        # Find corresponding M1 timestamp
+        m1_timestamp = m1_prices[m1_prices.index <= m5_timestamp].index[-1]
+        
+        predictions_list.append({
+            'timestamp': m1_timestamp,
+            'probability': proba,
+            'prediction': prediction,
+            'threshold': threshold,
+        })
+        
+        # Progress logging
+        if (i - min_m5_candles + 1) % 10000 == 0:
+            progress = (i - min_m5_candles + 1) / (len(m5_features) - min_m5_candles) * 100
+            logger.info(f"  Progress: {progress:.1f}% ({i - min_m5_candles + 1:,} / {len(m5_features) - min_m5_candles:,})")
     
     predictions_df = pd.DataFrame(predictions_list)
     predictions_df.set_index('timestamp', inplace=True)
     
-    logger.info(f"Generated {len(predictions_df):,} predictions")
-    logger.info(f"  BUY signals: {(predictions_df['prediction']==1).sum():,}")
-    logger.info(f"  HOLD signals: {(predictions_df['prediction']==0).sum():,}")
+    logger.info(f"\n{'='*80}")
+    logger.info("PREDICTION SUMMARY")
+    logger.info(f"{'='*80}")
+    logger.info(f"Total predictions: {len(predictions_df):,}")
+    logger.info(f"  BUY signals: {(predictions_df['prediction']==1).sum():,} ({(predictions_df['prediction']==1).sum()/len(predictions_df)*100:.2f}%)")
+    logger.info(f"  HOLD signals: {(predictions_df['prediction']==0).sum():,} ({(predictions_df['prediction']==0).sum()/len(predictions_df)*100:.2f}%)")
+    logger.info(f"  Avg probability: {predictions_df['probability'].mean():.4f}")
+    logger.info(f"  Min probability: {predictions_df['probability'].min():.4f}")
+    logger.info(f"  Max probability: {predictions_df['probability'].max():.4f}")
     
-    return predictions_df, prices
+    return predictions_df, m1_prices
 
 
 def plot_equity_curve(

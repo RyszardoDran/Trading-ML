@@ -1,18 +1,40 @@
 from __future__ import annotations
-"""Prediction script for sequence-based XAU/USD model.
+"""Prediction script for sequence-based XAU/USD model (M5 timeframe).
 
 Purpose:
 - Load trained sequence model from artifacts
-- Accept 100 previous candles as input
-- Engineer features matching training pipeline
+- Accept historical M1 candles (last 7 days recommended)
+- Aggregate M1 → M5 timeframe (proper OHLCV aggregation)
+- Engineer features on M5 bars with M15/M60 context
+- Use only last sequence_length M5 candles for prediction
 - Return probability of successful trade + expected win rate
 
+**CRITICAL: M5 TIMEFRAME ARCHITECTURE**
+Model operates on M5 timeframe (5-minute bars):
+
+**WHY 7 DAYS OF M1 DATA?**
+1. ~10,080 M1 candles → ~2,016 M5 candles after aggregation
+2. SMA200 needs 200 M5 candles minimum (~16.7 hours of M5 data)
+3. Multi-timeframe indicators (M5→M15→M60) require historical context
+4. Session features need data spanning multiple trading sessions
+5. 7 days provides sufficient M5 bars for all indicators
+
+**PROCESS:**
+1. Load last 7 days of M1 candles (~10,080 candles)
+2. Aggregate M1 → M5 using proper OHLCV (Open=first, High=max, Low=min, Close=last, Volume=sum)
+3. Calculate features on M5 timeframe with M15/M60 context
+4. Extract LAST 100 M5 candles for prediction (500 minutes = 8.3 hours context)
+5. Model predicts on properly-calculated M5 features
+
 Usage:
-    # Predict from CSV file with 100 candles
-    python predict_sequence.py --input-csv latest_100_candles.csv
+    # Predict from CSV file (automatically uses last 7 days of M1 data)
+    python predict_sequence.py --input-csv data.csv
     
-    # Predict from live data directory (takes last 100 candles)
+    # Predict from live data directory (takes last 7 days of M1)
     python predict_sequence.py --data-dir ml/src/data
+    
+    # Custom analysis window (e.g., 3 days of M1)
+    python predict_sequence.py --input-csv data.csv --analysis-days 3
     
 Output:
     {
@@ -20,7 +42,11 @@ Output:
         "prediction": 1,
         "threshold": 0.45,
         "expected_win_rate": 0.68,
-        "confidence": "high"
+        "confidence": "high",
+        "m1_candles_analyzed": 10080,
+        "m5_candles_generated": 2016,
+        "m5_candles_used_for_prediction": 100,
+        "analysis_window_days": 7
     }
 """
 
@@ -37,7 +63,7 @@ import pandas as pd
 # Add src to path to allow imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from features.engineer import engineer_candle_features
+from features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
 
 # Suppress sklearn version warnings
 import warnings
@@ -86,12 +112,17 @@ def load_model_artifacts(models_dir: Path) -> Dict:
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
 
+    # Extract analysis_window_days (default 7 days for robust indicator calculation)
+    # For backwards compatibility, also check for warmup_period
+    analysis_window_days = metadata.get("analysis_window_days", 7)
+    
     return {
         "model": model,
         "feature_columns": feature_columns,
         "threshold": metadata["threshold"],
         "win_rate": metadata["win_rate"],
         "window_size": metadata["window_size"],
+        "analysis_window_days": analysis_window_days,
         "scaler": scaler,
     }
 
@@ -132,25 +163,55 @@ def predict(
     models_dir: Path,
     artifacts: Optional[Dict] = None,  # NEW: optional pre-loaded artifacts
 ) -> Dict[str, float]:
-    """Predict probability and win rate from 100 candles.
+    """Predict probability and win rate from M1 candles (aggregates to M5).
 
+    **CRITICAL: M5 TIMEFRAME ARCHITECTURE**
+    This function requires M1 candles, then aggregates to M5 timeframe:
+    - 7 days M1 (~10,080 candles) → ~2,016 M5 candles
+    - SMA200 needs 200 M5 candles (16.7 hours of M5 data)
+    - Multi-timeframe indicators (M5→M15→M60) require historical context
+    - Model operates on 100 M5 candles = 500 minutes (8.3 hours) context
+    
+    **RECOMMENDED**: Provide last 7 days of M1 data (~10,080 M1 candles)
+    **MINIMUM**: Provide at least (window_size * 5 + 1000) M1 candles for M5 aggregation
+    
+    Process:
+    1. Load historical M1 candles (recommend: last 7 days)
+    2. Aggregate M1 → M5 using proper OHLCV aggregation
+    3. Engineer features on M5 timeframe with M15/M60 context
+    4. Extract LAST window_size M5 candles for prediction
+    5. Model predicts on properly-calculated M5 indicators
+    
     Args:
-        candles: DataFrame with exactly window_size candles (OHLCV)
+        candles: DataFrame with historical M1 OHLCV data (recommend 7 days)
         models_dir: Directory containing model artifacts
+        artifacts: Optional pre-loaded artifacts (for performance)
 
     Returns:
         Dictionary with prediction results:
         {
-            "probability": float,        # Model's probability of success
-            "prediction": int,           # Binary prediction (0 or 1)
-            "threshold": float,          # Classification threshold used
-            "expected_win_rate": float,  # Expected win rate from training
-            "confidence": str,           # "low", "medium", "high"
+            "probability": float,                      # Model's probability of success
+            "prediction": int,                         # Binary prediction (0 or 1)
+            "threshold": float,                        # Classification threshold used
+            "expected_win_rate": float,                # Expected win rate from training
+            "confidence": str,                         # "low", "medium", "high"
+            "m1_candles_analyzed": int,                # Total M1 candles analyzed
+            "m5_candles_generated": int,               # M5 candles after aggregation
+            "m5_candles_used_for_prediction": int,     # M5 candles in model input
+            "analysis_window_days": int,               # Recommended analysis window
         }
 
     Raises:
-        ValueError: On input validation failures
+        ValueError: On input validation failures (insufficient candles, missing columns)
         FileNotFoundError: If model artifacts not found
+        
+    Examples:
+        >>> # Load last 7 days of M1 data (recommended)
+        >>> candles_m1 = load_candles_last_n_days(7)
+        >>> result = predict(candles_m1, models_dir)
+        >>> print(f"M1 analyzed: {result['m1_candles_analyzed']}")
+        >>> print(f"M5 generated: {result['m5_candles_generated']}")
+        >>> print(f"Probability: {result['probability']:.2%}")
     """
     # Load model and metadata (or use pre-loaded)
     if artifacts is None:
@@ -161,26 +222,59 @@ def predict(
     threshold = artifacts["threshold"]
     win_rate = artifacts["win_rate"]
     window_size = artifacts["window_size"]
+    analysis_window_days = artifacts["analysis_window_days"]
     scaler = artifacts.get("scaler")
 
     if scaler is None:
         raise ValueError("Scaler artifact missing; retrain pipeline to regenerate artifacts")
 
-    # Validate input (basic checks only for performance)
-    if len(candles) != window_size:
-        raise ValueError(f"Expected {window_size} candles, got {len(candles)}")
+    # Calculate recommended minimum candles (conservative: window_size + 200 for SMA200)
+    min_recommended_candles = window_size + 200
+    
+    # Validate input
+    if len(candles) < window_size:
+        raise ValueError(
+            f"Insufficient candles: need at least {window_size} for prediction, got {len(candles)}"
+        )
+    
+    if len(candles) < min_recommended_candles:
+        logger.warning(
+            f"Low candle count: {len(candles)} candles provided. "
+            f"Recommend at least {min_recommended_candles} ({window_size} + 200 for SMA200) "
+            f"or {analysis_window_days} days (~{analysis_window_days * 24 * 60} M1 candles) for optimal indicator accuracy."
+        )
     
     required_cols = {"Open", "High", "Low", "Close", "Volume"}
     missing = required_cols - set(candles.columns)
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
 
-    # Engineer features (suppress repeated INFO logs)
-    logger.debug("Engineering features...")
-    features = engineer_candle_features(candles)
+    # Store original M1 candle count for reporting
+    m1_candles_count = len(candles)
+    
+    # STEP 1: Aggregate M1 → M5 (proper OHLCV aggregation)
+    logger.debug(f"Aggregating {m1_candles_count} M1 candles to M5 timeframe...")
+    candles_m5 = aggregate_to_m5(candles)
+    logger.debug(f"Aggregated to {len(candles_m5)} M5 candles ({len(candles_m5)/m1_candles_count*100:.1f}% compression)")
+    
+    # STEP 2: Engineer features on M5 timeframe with M15/M60 context
+    # This ensures indicators have proper multi-timeframe context
+    logger.debug(f"Engineering features on {len(candles_m5)} M5 candles (with M15/M60 context)...")
+    features_full = engineer_m5_candle_features(candles_m5)
+    
+    if len(features_full) != len(candles_m5):
+        raise ValueError(
+            f"Feature engineering produced {len(features_full)} rows, expected {len(candles_m5)}"
+        )
+    
+    # STEP 3: Extract LAST window_size M5 candles for prediction
+    # This gives us properly calculated indicators with full historical context
+    features = features_full.tail(window_size)
     
     if len(features) != window_size:
-        raise ValueError(f"Feature engineering produced {len(features)} rows, expected {window_size}")
+        raise ValueError(
+            f"After extracting sequence, got {len(features)} rows, expected {window_size}"
+        )
 
     # Verify feature alignment
     if list(features.columns) != feature_columns:
@@ -252,24 +346,47 @@ def predict(
         "threshold": float(threshold),
         "expected_win_rate": float(win_rate),
         "confidence": confidence,
+        "m1_candles_analyzed": m1_candles_count,
+        "m5_candles_generated": len(candles_m5),
+        "m5_candles_used_for_prediction": window_size,
+        "analysis_window_days": analysis_window_days,
     }
 
     return result
 
 
-def load_candles_from_csv(csv_path: Path, n_candles: int = 100) -> pd.DataFrame:
-    """Load last n_candles from CSV file.
+def load_candles_from_csv(
+    csv_path: Path, 
+    n_days: Optional[int] = 7,
+    n_candles: Optional[int] = None
+) -> pd.DataFrame:
+    """Load last n_days or n_candles from CSV file.
+    
+    **RECOMMENDED**: Use n_days=7 (default) for robust indicator calculation.
+    7 days of M1 data = ~10,080 candles, enough for SMA200, sessions, MTF indicators.
 
     Args:
         csv_path: Path to CSV file with OHLCV data
-        n_candles: Number of candles to load (from end)
+        n_days: Number of days to load from end (default 7). If provided, overrides n_candles.
+        n_candles: Number of candles to load (alternative to n_days)
 
     Returns:
-        DataFrame with last n_candles, datetime indexed
+        DataFrame with last n_days/n_candles, datetime indexed
 
     Raises:
         FileNotFoundError: If file doesn't exist
         ValueError: If insufficient data
+        
+    Examples:
+        >>> # Load last 7 days (recommended, ~10,080 M1 candles)
+        >>> candles = load_candles_from_csv('data.csv')
+        >>> len(candles)
+        10080
+        
+        >>> # Load specific number of candles
+        >>> candles = load_candles_from_csv('data.csv', n_days=None, n_candles=500)
+        >>> len(candles)
+        500
     """
     if not csv_path.exists():
         raise FileNotFoundError(f"File not found: {csv_path}")
@@ -287,25 +404,53 @@ def load_candles_from_csv(csv_path: Path, n_candles: int = 100) -> pd.DataFrame:
     df = df.set_index("Date")
     df.sort_index(inplace=True)
     
-    if len(df) < n_candles:
-        raise ValueError(f"Insufficient data: need {n_candles} candles, got {len(df)}")
+    # Determine how many candles to load
+    if n_days is not None:
+        # Load last n_days of data
+        cutoff_date = df.index.max() - pd.Timedelta(days=n_days)
+        df_filtered = df[df.index >= cutoff_date]
+        
+        if len(df_filtered) == 0:
+            raise ValueError(f"No data found in last {n_days} days")
+        
+        logger.info(f"Loaded {len(df_filtered)} candles from last {n_days} days")
+        return df_filtered
+    elif n_candles is not None:
+        # Load last n_candles
+        if len(df) < n_candles:
+            raise ValueError(f"Insufficient data: need {n_candles} candles, got {len(df)}")
+        return df.tail(n_candles)
+    else:
+        raise ValueError("Must specify either n_days or n_candles")
+
+
+def load_latest_candles_from_dir(
+    data_dir: Path,
+    n_days: Optional[int] = 7,
+    n_candles: Optional[int] = None
+) -> pd.DataFrame:
+    """Load last n_days or n_candles from all CSV files in directory.
     
-    return df.tail(n_candles)
-
-
-def load_latest_candles_from_dir(data_dir: Path, n_candles: int = 100) -> pd.DataFrame:
-    """Load last n_candles from all CSV files in directory.
+    **RECOMMENDED**: Use n_days=7 (default) for robust indicator calculation.
+    7 days of M1 data = ~10,080 candles, enough for SMA200, sessions, MTF indicators.
 
     Args:
         data_dir: Directory containing XAU_1m_data_*.csv files
-        n_candles: Number of candles to load (from end)
+        n_days: Number of days to load from end (default 7)
+        n_candles: Number of candles to load (alternative to n_days)
 
     Returns:
-        DataFrame with last n_candles, datetime indexed
+        DataFrame with last n_days/n_candles, datetime indexed
 
     Raises:
         FileNotFoundError: If no data files found
         ValueError: If insufficient data
+        
+    Examples:
+        >>> # Load last 7 days (recommended)
+        >>> candles = load_latest_candles_from_dir(Path('ml/src/data'))
+        >>> len(candles)  # ~10,080 M1 candles
+        10080
     """
     files = sorted(data_dir.glob("XAU_1m_data_*.csv"))
     if not files:
@@ -321,10 +466,23 @@ def load_latest_candles_from_dir(data_dir: Path, n_candles: int = 100) -> pd.Dat
     combined = combined[~combined.index.duplicated(keep="last")]
     combined.sort_index(inplace=True)
 
-    if len(combined) < n_candles:
-        raise ValueError(f"Insufficient data: need {n_candles} candles, got {len(combined)}")
-
-    return combined.tail(n_candles)
+    # Determine how many candles to return
+    if n_days is not None:
+        # Load last n_days of data
+        cutoff_date = combined.index.max() - pd.Timedelta(days=n_days)
+        df_filtered = combined[combined.index >= cutoff_date]
+        
+        if len(df_filtered) == 0:
+            raise ValueError(f"No data found in last {n_days} days")
+        
+        logger.info(f"Loaded {len(df_filtered)} candles from last {n_days} days")
+        return df_filtered
+    elif n_candles is not None:
+        if len(combined) < n_candles:
+            raise ValueError(f"Insufficient data: need {n_candles} candles, got {len(combined)}")
+        return combined.tail(n_candles)
+    else:
+        raise ValueError("Must specify either n_days or n_candles")
 
 
 if __name__ == "__main__":

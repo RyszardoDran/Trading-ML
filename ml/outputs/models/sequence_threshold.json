@@ -1,7 +1,10 @@
 {
-  "threshold": 0.7550000000000001,
-  "win_rate": 0.8506616257088847,
-  "window_size": 100,
+  "threshold": 0.63,
+  "win_rate": 0.85,
+  "window_size": 60,
+  "analysis_window_days": 7,
   "n_features_per_candle": 15,
-  "total_features": 1500
+  "total_features": 900,
+  "recommended_min_candles": 260,
+  "recommended_analysis_candles": 10080
 }
