@@ -26,6 +26,9 @@ logging.getLogger('ml.src.features.engineer').setLevel(logging.ERROR)  # Suppres
 
 import pandas as pd
 import numpy as np
+import argparse
+from typing import Iterable, List
+import datetime as _dt
 
 from ml.src.backtesting import BacktestEngine, BacktestConfig
 from ml.src.backtesting.position_sizer import PositionSizingMethod
@@ -36,6 +39,54 @@ from ml.src.utils import PipelineConfig
 print("=" * 80)
 print("QUICK BACKTEST - ONE DAY OF DATA")
 print("=" * 80)
+# Parse CLI args for session/day selection
+parser = argparse.ArgumentParser(description='Quick backtest with optional session/day filters')
+parser.add_argument('--session', choices=['all', 'london', 'ny', 'asia'], default='all',
+                    help='Restrict data to a trading session (hours in UTC).')
+parser.add_argument('--days', type=str, default=None,
+                    help='Comma-separated weekdays (Mon,Tue,...) or ISO dates (YYYY-MM-DD) to include. Example: Mon,Tue or 2023-06-01,2023-06-05')
+args = parser.parse_args()
+
+def _parse_days_arg(days_arg: str) -> List[str]:
+    return [d.strip() for d in days_arg.split(',') if d.strip()]
+
+def _is_weekday_token(tok: str) -> bool:
+    return tok[:3].lower() in {'mon','tue','wed','thu','fri','sat','sun'}
+
+def _parse_date_tokens(tokens: Iterable[str]) -> List[_dt.date]:
+    out: List[_dt.date] = []
+    for t in tokens:
+        try:
+            out.append(_dt.date.fromisoformat(t))
+        except Exception:
+            continue
+    return out
+
+def filter_by_session(df: pd.DataFrame, session: str) -> pd.DataFrame:
+    if session == 'all' or df.empty:
+        return df
+
+    # Assumes index is UTC or timezone-naive representing UTC
+    idx = df.index
+    if getattr(idx, 'tz', None) is None:
+        hours = idx.hour
+    else:
+        hours = idx.tz_convert('UTC').hour
+
+    sessions = {
+        'london': (7, 16),   # 07:00-16:00 UTC (approx London session)
+        'ny': (12, 21),      # 12:00-21:00 UTC (approx New York session)
+        'asia': (23, 8),     # 23:00-08:00 UTC (wrap-around Asia session)
+    }
+
+    start_h, end_h = sessions.get(session, (0, 24))
+    if start_h < end_h:
+        mask = (hours >= start_h) & (hours < end_h)
+    else:
+        # wrap-around (e.g., 23 -> 08)
+        mask = (hours >= start_h) | (hours < end_h)
+
+    return df.iloc[mask]
 
 # Setup paths
 config_obj = PipelineConfig()
@@ -49,12 +100,51 @@ print(f"Loaded {len(prices):,} candles from 2023")
 print(f"Period: {prices.index[0]} to {prices.index[-1]}")
 
 # Take first DAY only (for speed)
-print("\n[2/4] Extracting first day...")
-start_date = prices.index[0]
-end_date = start_date + pd.Timedelta(days=1)
-week_prices = prices[(prices.index >= start_date) & (prices.index < end_date)]
-print(f"Day: {week_prices.index[0]} to {week_prices.index[-1]}")
+
+# Take first DAY only (for speed) OR apply user day/session filters
+print("\n[2/4] Extracting day(s) and applying filters...")
+if args.days:
+    tokens = _parse_days_arg(args.days)
+    # Separate date tokens from weekday tokens
+    date_tokens = [t for t in tokens if not _is_weekday_token(t)]
+    weekday_tokens = [t for t in tokens if _is_weekday_token(t)]
+
+    selected = prices
+    # Filter by explicit dates if provided
+    dates_list = _parse_date_tokens(date_tokens)
+    if dates_list:
+        masks = [((prices.index.date) == d) for d in dates_list]
+        if masks:
+            combined = masks[0]
+            for m in masks[1:]:
+                combined = combined | m
+            selected = selected[combined]
+
+    # Filter by weekdays if provided (Mon,Tue,...)
+    if weekday_tokens:
+        wk_map = {'mon':0,'tue':1,'wed':2,'thu':3,'fri':4,'sat':5,'sun':6}
+        wk_nums = {wk_map[t[:3].lower()] for t in weekday_tokens}
+        selected = selected[selected.index.weekday.isin(wk_nums)]
+
+    week_prices = selected
+    if week_prices.empty:
+        print("No data matched --days filter; exiting.")
+        raise SystemExit(1)
+else:
+    # Default behaviour: use the very first calendar day in the dataset
+    start_date = prices.index[0]
+    end_date = start_date + pd.Timedelta(days=1)
+    week_prices = prices[(prices.index >= start_date) & (prices.index < end_date)]
+
+print(f"Day(s) span: {week_prices.index[0]} to {week_prices.index[-1]}")
 print(f"Samples: {len(week_prices):,} candles")
+
+# Apply session filter (if any)
+if args.session and args.session != 'all':
+    before = len(week_prices)
+    week_prices = filter_by_session(week_prices, args.session)
+    after = len(week_prices)
+    print(f"Applied session='{args.session}': {before:,} -> {after:,} candles")
 
 # Load model ONCE (not in loop!)
 print("\n[3/4] Loading model...")
@@ -80,11 +170,16 @@ for i in range(window_size, len(week_prices)):
     try:
         # Pass pre-loaded artifacts to avoid reloading model each time
         result = predict(window_data, models_dir, artifacts=artifacts)
+        
+        # Calculate ATR from last candle for SL/TP
+        atr_value = window_data['atr_14'].iloc[-1] if 'atr_14' in window_data.columns else None
+        
         predictions_list.append({
             'timestamp': week_prices.index[i],
             'probability': result['probability'],
             'prediction': result['prediction'],
             'threshold': result['threshold'],
+            'atr': atr_value,
         })
     except Exception as e:
         error_count += 1

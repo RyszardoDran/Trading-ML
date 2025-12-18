@@ -60,6 +60,9 @@ class BacktestConfig:
     min_probability: float = 0.5  # Minimum model probability
     use_stop_loss: bool = True
     use_take_profit: bool = True
+    atr_sl_multiplier: float = 1.0  # ATR multiplier for stop loss
+    atr_tp_multiplier: float = 1.8  # ATR multiplier for take profit
+    max_horizon_minutes: int = 60  # Maximum trade duration in minutes
     max_trades_per_day: Optional[int] = None  # None = unlimited
     max_position_size: float = 1.0  # Max 1 lot
     min_position_size: float = 0.01  # Min 0.01 lots

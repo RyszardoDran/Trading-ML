@@ -321,12 +321,20 @@ class BacktestEngine:
                     signal_prob=pred_row['probability'],
                 )
                 
+                # Get ATR value for SL/TP calculation
+                atr_value = pred_row.get('atr', None)
+                
+                # Get future prices for exit simulation
+                future_prices = prices.iloc[i:min(i+self.config.max_horizon_minutes+1, len(prices))]
+                
                 # Execute trade
                 trade_result = self._execute_trade(
                     timestamp=timestamp,
                     position_size=position_size,
                     entry_price=price_row['Close'],
                     probability=pred_row['probability'],
+                    atr=atr_value,
+                    future_prices=future_prices,
                     actual_outcome=targets.iloc[i] if targets is not None else None,
                 )
                 
@@ -350,45 +358,89 @@ class BacktestEngine:
         position_size: float,
         entry_price: float,
         probability: float,
+        atr: Optional[float] = None,
+        future_prices: Optional[pd.DataFrame] = None,
         actual_outcome: Optional[int] = None,
     ) -> dict:
         """Execute a single trade and calculate PnL.
         
         Args:
-            timestamp: Trade timestamp
+            timestamp: Trade timestamp (entry time)
             position_size: Position size in lots
             entry_price: Entry price
             probability: Model probability
+            atr: ATR value for SL/TP calculation
+            future_prices: DataFrame with future prices for exit simulation
             actual_outcome: Actual trade outcome (1=win, 0=loss) if known
             
         Returns:
-            Dictionary with trade details
+            Dictionary with trade details including SL, TP, and exit time
         """
         # Transaction costs
         transaction_cost = self.config.total_transaction_cost()
         
-        # Simulate trade outcome
-        if actual_outcome is not None:
-            # Use actual outcome if provided
-            is_win = (actual_outcome == 1)
+        # Calculate SL and TP levels
+        if atr is not None and not np.isnan(atr):
+            sl_distance = self.config.atr_sl_multiplier * atr
+            tp_distance = self.config.atr_tp_multiplier * atr
+            sl_price = entry_price - sl_distance
+            tp_price = entry_price + tp_distance
         else:
-            # Simulate based on probability
-            is_win = (np.random.random() < probability)
+            # Fallback to percentage-based levels if ATR not available
+            sl_price = entry_price * 0.999  # 0.1% stop loss
+            tp_price = entry_price * 1.002  # 0.2% take profit
         
-        # Calculate PnL (simplified model)
-        if is_win:
-            # Assume average win of 2x risk
-            gross_pnl = position_size * entry_price * 0.002  # 20 pips profit
-        else:
-            # Assume average loss of 1x risk
-            gross_pnl = -position_size * entry_price * 0.001  # 10 pips loss
+        # Simulate exit by checking future prices
+        exit_time = None
+        exit_price = None
+        is_win = None
         
+        if future_prices is not None and len(future_prices) > 1:
+            for idx in range(1, len(future_prices)):
+                candle = future_prices.iloc[idx]
+                
+                # Check if SL hit
+                if candle['Low'] <= sl_price:
+                    exit_time = future_prices.index[idx]
+                    exit_price = sl_price
+                    is_win = False
+                    break
+                
+                # Check if TP hit
+                if candle['High'] >= tp_price:
+                    exit_time = future_prices.index[idx]
+                    exit_price = tp_price
+                    is_win = True
+                    break
+        
+        # If no exit found in future prices, use actual outcome or simulate
+        if exit_time is None:
+            exit_time = timestamp + pd.Timedelta(minutes=self.config.max_horizon_minutes)
+            
+            if actual_outcome is not None:
+                is_win = (actual_outcome == 1)
+            else:
+                # Simulate based on probability
+                is_win = (np.random.random() < probability)
+            
+            exit_price = tp_price if is_win else sl_price
+        
+        # Calculate PnL based on actual exit
+        gross_pnl = position_size * (exit_price - entry_price)
         net_pnl = gross_pnl - transaction_cost
+        
+        # Calculate trade duration in minutes
+        duration_minutes = (exit_time - timestamp).total_seconds() / 60 if exit_time else None
         
         return {
             'timestamp': timestamp,
+            'exit_time': exit_time,
+            'duration_minutes': duration_minutes,
             'position_size': position_size,
             'entry_price': entry_price,
+            'exit_price': exit_price,
+            'sl_price': sl_price,
+            'tp_price': tp_price,
             'probability': probability,
             'is_win': is_win,
             'gross_pnl': gross_pnl,

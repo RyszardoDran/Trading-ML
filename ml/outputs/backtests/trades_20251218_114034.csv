@@ -1,0 +1,2 @@
+timestamp,exit_time,duration_minutes,position_size,entry_price,exit_price,sl_price,tp_price,probability,is_win,gross_pnl,transaction_cost,pnl
+2023-06-07 11:07:00,2023-06-07 12:00:00,53.0,0.3,1957.83,1961.7456,1955.8722,1961.7456,0.8381862044334412,True,1.1746949,0.8,0.37469488

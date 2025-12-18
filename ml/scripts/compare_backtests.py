@@ -1,0 +1,70 @@
+"""
+Porównanie dwóch backestów - stary vs nowy
+"""
+import pandas as pd
+
+old = pd.read_csv('ml/outputs/backtests/trades_20251217_232318.csv')
+new = pd.read_csv('ml/outputs/backtests/trades_20251217_233406.csv')
+
+print('=' * 80)
+print('PORÓWNANIE BACKESTÓW')
+print('=' * 80)
+print()
+
+print('STARY BACKTEST (232318) - PRZED ZMIANAMI:')
+print(f'  Liczba trades: {len(old)}')
+print(f'  Win Rate: {(old.is_win==True).sum()/len(old)*100:.1f}%')
+print(f'  Total P&L: ${old.pnl.sum():.2f}')
+print(f'  Avg Gross P&L: ${old.gross_pnl.mean():.4f}')
+print(f'  Kolumny: {list(old.columns)}')
+print()
+
+print('NOWY BACKTEST (233406) - PO ZMIANACH:')
+print(f'  Liczba trades: {len(new)}')
+print(f'  Win Rate: {(new.is_win==True).sum()/len(new)*100:.1f}%')
+print(f'  Total P&L: ${new.pnl.sum():.2f}')
+print(f'  Avg Gross P&L: ${new.gross_pnl.mean():.4f}')
+print(f'  Kolumny: {list(new.columns)}')
+print()
+
+print('RÓŻNICE:')
+print(f'  Ten sam entry time? {old.timestamp.equals(new.timestamp)}')
+print(f'  Te same entry prices? {old.entry_price.equals(new.entry_price)}')
+print(f'  Te same position sizes? {old.position_size.equals(new.position_size)}')
+print(f'  Te same predictions? {old.probability.equals(new.probability)}')
+print()
+
+print('=' * 80)
+print('SZCZEGÓŁOWE PORÓWNANIE TRADE-BY-TRADE:')
+print('=' * 80)
+
+for i in range(min(len(old), len(new))):
+    print(f'\nTRADE #{i+1}:')
+    print(f'  Entry Time: {old.iloc[i].timestamp}')
+    print(f'  Entry Price: ${old.iloc[i].entry_price:.2f}')
+    print()
+    print(f'  STARY:')
+    print(f'    Gross P&L: ${old.iloc[i].gross_pnl:.4f}')
+    print(f'    Net P&L: ${old.iloc[i].pnl:.4f}')
+    print(f'    Win: {old.iloc[i].is_win}')
+    print()
+    print(f'  NOWY:')
+    print(f'    Exit Time: {new.iloc[i].exit_time}')
+    print(f'    Exit Price: ${new.iloc[i].exit_price:.2f}')
+    print(f'    SL: ${new.iloc[i].sl_price:.2f}  TP: ${new.iloc[i].tp_price:.2f}')
+    print(f'    Gross P&L: ${new.iloc[i].gross_pnl:.4f}')
+    print(f'    Net P&L: ${new.iloc[i].pnl:.4f}')
+    print(f'    Win: {new.iloc[i].is_win}')
+    print(f'    Duration: {new.iloc[i].duration_minutes:.0f} min')
+
+print()
+print('=' * 80)
+print('WNIOSKI:')
+print('=' * 80)
+print()
+print('Stary backtest prawdopodobnie SYMULOWAŁ wyniki (zakładał że wszystkie')
+print('trades osiągną TP), podczas gdy nowy backtest SPRAWDZA rzeczywiste ceny')
+print('i wykrywa kiedy SL/TP zostały faktycznie trafione.')
+print()
+print('To wyjaśnia dlaczego stary miał 100% win rate - nie sprawdzał czy rynek')
+print('faktycznie dotarł do TP, tylko zakładał że tak się stanie.')

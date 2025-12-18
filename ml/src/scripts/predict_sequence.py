@@ -356,7 +356,7 @@ if __name__ == "__main__":
         if args.models_dir:
             models_dir = Path(args.models_dir)
         else:
-            models_dir = Path(__file__).parent.parent / "models"
+            models_dir = Path(__file__).parent.parent.parent / "outputs" / "models"
 
         # Load candles
         if args.input_csv:
