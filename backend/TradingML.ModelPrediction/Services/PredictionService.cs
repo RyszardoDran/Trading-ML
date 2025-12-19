@@ -112,6 +112,15 @@ public class PredictionService
                 EffectiveInputFromUtc = effectiveFromUtc,
                 EffectiveInputToUtc = effectiveToUtc,
                 EffectiveInputFingerprint = effectiveFp,
+                EntryPrice = py.EntryPrice,
+                AtrM5 = py.AtrM5,
+                StopLoss = py.StopLoss,
+                TakeProfit = py.TakeProfit,
+                SlAtrMultiplier = py.SlAtrMultiplier,
+                TpAtrMultiplier = py.TpAtrMultiplier,
+                RiskRewardRatio = py.RiskRewardRatio,
+                ExpectedWinRate = py.ExpectedWinRate,
+                Confidence = py.Confidence,
                 PythonOutputJson = py.CompactJson,
                 Threshold = _metadata.Threshold
             };
@@ -139,8 +148,43 @@ public class PredictionService
         int Prediction,
         double? ScriptThreshold,
         int? M1CandlesAnalyzed,
+        double? EntryPrice,
+        double? AtrM5,
+        double? StopLoss,
+        double? TakeProfit,
+        double? SlAtrMultiplier,
+        double? TpAtrMultiplier,
+        double? RiskRewardRatio,
+        double? ExpectedWinRate,
+        string? Confidence,
         string RawJson,
         string CompactJson);
+
+    private static double? TryGetNullableDouble(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var el))
+            return null;
+
+        return el.ValueKind switch
+        {
+            JsonValueKind.Number => el.GetDouble(),
+            JsonValueKind.Null => null,
+            _ => null
+        };
+    }
+
+    private static string? TryGetNullableString(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var el))
+            return null;
+
+        return el.ValueKind switch
+        {
+            JsonValueKind.String => el.GetString(),
+            JsonValueKind.Null => null,
+            _ => null
+        };
+    }
 
     private async Task<PythonPrediction> CallPythonPredictionAsync(List<Candle> candles)
     {
@@ -251,11 +295,30 @@ public class PredictionService
                 if (root.TryGetProperty("m1_candles_analyzed", out var m1El) && m1El.ValueKind == JsonValueKind.Number)
                     candlesUsedByPython = m1El.GetInt32();
 
+                var entryPrice = TryGetNullableDouble(root, "entry_price");
+                var atrM5 = TryGetNullableDouble(root, "atr_m5");
+                var stopLoss = TryGetNullableDouble(root, "sl");
+                var takeProfit = TryGetNullableDouble(root, "tp");
+                var slAtrMultiplier = TryGetNullableDouble(root, "sl_atr_multiplier");
+                var tpAtrMultiplier = TryGetNullableDouble(root, "tp_atr_multiplier");
+                var rr = TryGetNullableDouble(root, "rr");
+                var expectedWinRate = TryGetNullableDouble(root, "expected_win_rate");
+                var confidence = TryGetNullableString(root, "confidence");
+
                 return new PythonPrediction(
                     Probability: probability,
                     Prediction: prediction,
                     ScriptThreshold: scriptThreshold,
                     M1CandlesAnalyzed: candlesUsedByPython,
+                    EntryPrice: entryPrice,
+                    AtrM5: atrM5,
+                    StopLoss: stopLoss,
+                    TakeProfit: takeProfit,
+                    SlAtrMultiplier: slAtrMultiplier,
+                    TpAtrMultiplier: tpAtrMultiplier,
+                    RiskRewardRatio: rr,
+                    ExpectedWinRate: expectedWinRate,
+                    Confidence: confidence,
                     RawJson: outputJson,
                     CompactJson: compactJson);
             }

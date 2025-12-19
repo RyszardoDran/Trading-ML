@@ -1,6 +1,6 @@
 {
-  "threshold": 0.63,
-  "win_rate": 0.85,
+  "threshold": 0.69,
+  "win_rate": 0.8506876227897839,
   "window_size": 60,
   "analysis_window_days": 7,
   "n_features_per_candle": 15,

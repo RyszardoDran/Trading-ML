@@ -61,6 +61,51 @@ public class PredictionResult
     public string? EffectiveInputFingerprint { get; set; }
 
     /// <summary>
+    /// Entry price used by the Python script (typically last M5 close).
+    /// </summary>
+    public double? EntryPrice { get; set; }
+
+    /// <summary>
+    /// ATR computed on M5 candles by the Python pipeline (may be null if not available).
+    /// </summary>
+    public double? AtrM5 { get; set; }
+
+    /// <summary>
+    /// Stop-loss price returned by the Python pipeline (may be null for no-trade / filtered cases).
+    /// </summary>
+    public double? StopLoss { get; set; }
+
+    /// <summary>
+    /// Take-profit price returned by the Python pipeline (may be null for no-trade / filtered cases).
+    /// </summary>
+    public double? TakeProfit { get; set; }
+
+    /// <summary>
+    /// SL ATR multiplier used by Python (expected to be consistent with risk configuration).
+    /// </summary>
+    public double? SlAtrMultiplier { get; set; }
+
+    /// <summary>
+    /// TP ATR multiplier used by Python (expected to be consistent with risk configuration).
+    /// </summary>
+    public double? TpAtrMultiplier { get; set; }
+
+    /// <summary>
+    /// Risk/reward ratio (TP distance / SL distance).
+    /// </summary>
+    public double? RiskRewardRatio { get; set; }
+
+    /// <summary>
+    /// Expected win rate returned by Python (training/test estimate).
+    /// </summary>
+    public double? ExpectedWinRate { get; set; }
+
+    /// <summary>
+    /// Confidence label returned by the Python pipeline (e.g. high/medium/low or filter reason).
+    /// </summary>
+    public string? Confidence { get; set; }
+
+    /// <summary>
     /// Optional compact JSON returned by the Python predictor (single line).
     /// </summary>
     public string? PythonOutputJson { get; set; }

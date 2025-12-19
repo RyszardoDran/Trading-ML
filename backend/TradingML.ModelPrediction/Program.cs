@@ -1,5 +1,6 @@
 using TradingML.ModelPrediction.Models;
 using TradingML.ModelPrediction.Services;
+using System.Globalization;
 
 namespace TradingML.ModelPrediction;
 
@@ -141,6 +142,26 @@ class Program
         Console.WriteLine($"  Prediction Time:      {result.PredictionTime:yyyy-MM-dd HH:mm:ss UTC}");
         Console.WriteLine($"  Model Win Rate:       {metadata.WinRate:P2}");
 
+        if (!string.IsNullOrWhiteSpace(result.Confidence))
+            Console.WriteLine($"  Python Confidence:    {result.Confidence,-30}");
+        if (result.ExpectedWinRate.HasValue)
+            Console.WriteLine($"  Expected Win Rate:    {result.ExpectedWinRate.Value:P2}");
+        if (result.EntryPrice.HasValue)
+            Console.WriteLine($"  Entry Price:          {result.EntryPrice.Value.ToString("0.#####", CultureInfo.InvariantCulture),-30}");
+        if (result.AtrM5.HasValue)
+            Console.WriteLine($"  ATR (M5):             {result.AtrM5.Value.ToString("0.#####", CultureInfo.InvariantCulture),-30}");
+        if (result.StopLoss.HasValue)
+            Console.WriteLine($"  Stop Loss:            {result.StopLoss.Value.ToString("0.#####", CultureInfo.InvariantCulture),-30}");
+        if (result.TakeProfit.HasValue)
+            Console.WriteLine($"  Take Profit:          {result.TakeProfit.Value.ToString("0.#####", CultureInfo.InvariantCulture),-30}");
+        if (result.SlAtrMultiplier.HasValue || result.TpAtrMultiplier.HasValue || result.RiskRewardRatio.HasValue)
+        {
+            var slm = result.SlAtrMultiplier?.ToString("0.###", CultureInfo.InvariantCulture) ?? "(n/a)";
+            var tpm = result.TpAtrMultiplier?.ToString("0.###", CultureInfo.InvariantCulture) ?? "(n/a)";
+            var rr = result.RiskRewardRatio?.ToString("0.###", CultureInfo.InvariantCulture) ?? "(n/a)";
+            Console.WriteLine($"  Risk Params:          SLx={slm}, TPx={tpm}, RR={rr}");
+        }
+
         if (!string.IsNullOrWhiteSpace(result.PythonOutputJson))
             Console.WriteLine($"  Python JSON:          {result.PythonOutputJson}");
 
@@ -186,6 +207,15 @@ class Program
                 result.EffectiveInputFromUtc,
                 result.EffectiveInputToUtc,
                 result.EffectiveInputFingerprint,
+                result.EntryPrice,
+                result.AtrM5,
+                result.StopLoss,
+                result.TakeProfit,
+                result.SlAtrMultiplier,
+                result.TpAtrMultiplier,
+                result.RiskRewardRatio,
+                result.ExpectedWinRate,
+                result.Confidence,
                 result.PredictionTime,
                 ModelWinRate = metadata.WinRate,
                 ModelThreshold = metadata.Threshold,

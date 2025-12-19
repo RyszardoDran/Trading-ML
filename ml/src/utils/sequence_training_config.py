@@ -13,6 +13,8 @@ Example:
 from dataclasses import dataclass
 from pathlib import Path
 
+from ml.src.utils.risk_config import SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER
+
 # Get absolute path to ml/ directory
 _config_file = Path(__file__)
 _utils_dir = _config_file.parent
@@ -43,8 +45,8 @@ class PipelineConfig:
     
     # Thresholds and parameters
     window_size: int = 60
-    atr_multiplier_sl: float = 1.0
-    atr_multiplier_tp: float = 2.0
+    atr_multiplier_sl: float = SL_ATR_MULTIPLIER
+    atr_multiplier_tp: float = TP_ATR_MULTIPLIER
     min_hold_minutes: int = 5
     max_horizon: int = 60
     random_state: int = 42

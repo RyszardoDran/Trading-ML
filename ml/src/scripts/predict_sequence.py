@@ -64,6 +64,8 @@ import pandas as pd
 sys.path.append(str(Path(__file__).parent.parent))
 
 from features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
+from features.indicators import compute_atr
+from utils.risk_config import ATR_PERIOD_M5, SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER, risk_reward_ratio
 
 # Suppress sklearn version warnings
 import warnings
@@ -72,6 +74,28 @@ warnings.filterwarnings('ignore', category=InconsistentVersionWarning)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+def _compute_atr_m5(candles_m5: pd.DataFrame, period: int = ATR_PERIOD_M5) -> Optional[float]:
+    if candles_m5.empty:
+        return None
+
+    required_cols = {"High", "Low", "Close"}
+    if not required_cols.issubset(candles_m5.columns):
+        return None
+
+    atr_series = compute_atr(
+        candles_m5["High"].astype(np.float32),
+        candles_m5["Low"].astype(np.float32),
+        candles_m5["Close"].astype(np.float32),
+        period=period,
+    )
+
+    atr_last = float(atr_series.iloc[-1])
+    if not np.isfinite(atr_last) or atr_last <= 0:
+        return None
+
+    return atr_last
 
 
 def load_model_artifacts(models_dir: Path) -> Dict:
@@ -256,6 +280,9 @@ def predict(
     logger.debug(f"Aggregating {m1_candles_count} M1 candles to M5 timeframe...")
     candles_m5 = aggregate_to_m5(candles)
     logger.debug(f"Aggregated to {len(candles_m5)} M5 candles ({len(candles_m5)/m1_candles_count*100:.1f}% compression)")
+
+    entry_price = float(candles_m5["Close"].iloc[-1])
+    atr_m5 = _compute_atr_m5(candles_m5)
     
     # STEP 2: Engineer features on M5 timeframe with M15/M60 context
     # This ensures indicators have proper multi-timeframe context
@@ -284,6 +311,20 @@ def predict(
         except KeyError as e:
             raise ValueError(f"Feature mismatch: {e}")
 
+    rr = risk_reward_ratio()
+    common_result = {
+        "threshold": float(threshold),
+        "m1_candles_analyzed": m1_candles_count,
+        "m5_candles_generated": len(candles_m5),
+        "m5_candles_used_for_prediction": window_size,
+        "analysis_window_days": analysis_window_days,
+        "entry_price": float(entry_price),
+        "atr_m5": float(atr_m5) if atr_m5 is not None else None,
+        "sl_atr_multiplier": float(SL_ATR_MULTIPLIER),
+        "tp_atr_multiplier": float(TP_ATR_MULTIPLIER),
+        "rr": float(rr),
+    }
+
     # --- TREND FILTER CHECK ---
     # Check if the latest candle is in an uptrend (Close > SMA200) AND ADX > 15 AND RSI_M5 < 75
     if "dist_sma_200" in features.columns and "adx" in features.columns:
@@ -293,20 +334,24 @@ def predict(
         if last_dist <= 0:
             logger.debug(f"Trend Filter: dist_sma_200={last_dist:.4f} (filtered)")
             return {
+                **common_result,
                 "probability": 0.0,
                 "prediction": 0,
-                "threshold": threshold,
                 "expected_win_rate": 0.0,
                 "confidence": "low (trend filter)",
+                "sl": None,
+                "tp": None,
             }
         if last_adx <= 15:
             logger.debug(f"Trend Filter: ADX={last_adx:.2f} (filtered)")
             return {
+                **common_result,
                 "probability": 0.0,
                 "prediction": 0,
-                "threshold": threshold,
                 "expected_win_rate": 0.0,
                 "confidence": "low (weak trend)",
+                "sl": None,
+                "tp": None,
             }
             
     if "rsi_m5" in features.columns:
@@ -314,11 +359,13 @@ def predict(
         if last_rsi >= 75:
             logger.debug(f"Pullback Filter: RSI_M5={last_rsi:.2f} (filtered)")
             return {
+                **common_result,
                 "probability": 0.0,
                 "prediction": 0,
-                "threshold": threshold,
                 "expected_win_rate": 0.0,
                 "confidence": "low (overbought)",
+                "sl": None,
+                "tp": None,
             }
     # --------------------------
 
@@ -340,16 +387,20 @@ def predict(
     else:
         confidence = "low"
 
+    sl = None
+    tp = None
+    if prediction == 1 and atr_m5 is not None:
+        sl = float(entry_price - (SL_ATR_MULTIPLIER * atr_m5))
+        tp = float(entry_price + (TP_ATR_MULTIPLIER * atr_m5))
+
     result = {
+        **common_result,
         "probability": float(proba),
         "prediction": prediction,
-        "threshold": float(threshold),
         "expected_win_rate": float(win_rate),
         "confidence": confidence,
-        "m1_candles_analyzed": m1_candles_count,
-        "m5_candles_generated": len(candles_m5),
-        "m5_candles_used_for_prediction": window_size,
-        "analysis_window_days": analysis_window_days,
+        "sl": sl,
+        "tp": tp,
     }
 
     return result
