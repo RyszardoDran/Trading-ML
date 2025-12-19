@@ -129,9 +129,20 @@ class Program
         Console.WriteLine($"  Probability:          {result.Probability:P2}");
         Console.WriteLine($"  Decision Threshold:   {result.Threshold:P2}");
         Console.WriteLine($"  Prediction Class:     {(result.Prediction == 1 ? "BUY" : "SELL"),-30}");
+        Console.WriteLine($"  Candles Provided:     {result.CandlesProvided,-30}");
         Console.WriteLine($"  Candles Used:         {result.CandlesUsed,-30}");
+        if (result.EffectiveInputCandlesCount.HasValue && result.EffectiveInputFromUtc.HasValue && result.EffectiveInputToUtc.HasValue)
+        {
+            var fp = string.IsNullOrWhiteSpace(result.EffectiveInputFingerprint) ? "(n/a)" : result.EffectiveInputFingerprint;
+            Console.WriteLine(
+                $"  Python Effective:      last 7d => {result.EffectiveInputCandlesCount.Value} candles, " +
+                $"{result.EffectiveInputFromUtc.Value:yyyy-MM-dd HH:mm}..{result.EffectiveInputToUtc.Value:yyyy-MM-dd HH:mm} UTC, fp={fp}");
+        }
         Console.WriteLine($"  Prediction Time:      {result.PredictionTime:yyyy-MM-dd HH:mm:ss UTC}");
         Console.WriteLine($"  Model Win Rate:       {metadata.WinRate:P2}");
+
+        if (!string.IsNullOrWhiteSpace(result.PythonOutputJson))
+            Console.WriteLine($"  Python JSON:          {result.PythonOutputJson}");
 
         Console.WriteLine();
         Console.WriteLine("╔════════════════════════════════════════════════════════════════╗");
@@ -170,6 +181,11 @@ class Program
                 result.IsSignal,
                 result.Prediction,
                 result.CandlesUsed,
+                result.CandlesProvided,
+                result.EffectiveInputCandlesCount,
+                result.EffectiveInputFromUtc,
+                result.EffectiveInputToUtc,
+                result.EffectiveInputFingerprint,
                 result.PredictionTime,
                 ModelWinRate = metadata.WinRate,
                 ModelThreshold = metadata.Threshold,

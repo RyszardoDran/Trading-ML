@@ -1,4 +1,9 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using TradingML.ModelPrediction.Models;
 
 namespace TradingML.ModelPrediction.Services;
@@ -42,33 +47,77 @@ public class PredictionService
 
         _logger.LogInformation($"Starting prediction with {candles.Count} candles");
 
-        // Take the last window_size candles
+        // For diagnostics we fingerprint only the effective model window.
+        // For prediction we pass the full candle context to the Python pipeline.
         var recentCandles = candles.TakeLast(_metadata.WindowSize).ToList();
         if (recentCandles.Count < _metadata.WindowSize)
-        {
             _logger.LogWarning($"Requested window size {_metadata.WindowSize} but only {recentCandles.Count} candles available");
+
+        var fingerprint = ComputeCandlesFingerprint(recentCandles);
+        var lastCloseStr = recentCandles.Last().Close.ToString("0.#####", CultureInfo.InvariantCulture);
+        _logger.LogInformation(
+            $"Input summary: total={candles.Count}, used={recentCandles.Count}, " +
+            $"totalRange={candles.First().Timestamp:o}..{candles.Last().Timestamp:o}, " +
+            $"usedRange={recentCandles.First().Timestamp:o}..{recentCandles.Last().Timestamp:o}, " +
+            $"lastClose={lastCloseStr}, fp={fingerprint}");
+
+        LogCandleStats("context", candles);
+        LogCandleStats("window", recentCandles);
+
+        // predict_sequence.py loads last N days by default (N=7 in current script).
+        // Compute and carry this into the final result so run summaries are self-explanatory.
+        int? effectiveCount = null;
+        DateTime? effectiveFromUtc = null;
+        DateTime? effectiveToUtc = null;
+        string? effectiveFp = null;
+        try
+        {
+            var cutoff = candles.Last().Timestamp.AddDays(-7);
+            var lastNDays = candles.Where(c => c.Timestamp >= cutoff).ToList();
+            if (lastNDays.Count > 0)
+            {
+                effectiveCount = lastNDays.Count;
+                effectiveFromUtc = lastNDays.First().Timestamp.ToUniversalTime();
+                effectiveToUtc = lastNDays.Last().Timestamp.ToUniversalTime();
+                effectiveFp = ComputeCandlesFingerprint(lastNDays);
+                _logger.LogDebug(
+                    $"Python-effective input (default 7d): count={effectiveCount}, range={effectiveFromUtc:o}..{effectiveToUtc:o}, fp={effectiveFp}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to compute effective-window fingerprint");
         }
 
         try
         {
-            // Call Python prediction script
-            var (probability, prediction) = await CallPythonPredictionAsync(recentCandles);
+            // Call Python prediction script (pass full context; Python uses last window internally)
+            var py = await CallPythonPredictionAsync(candles);
 
-            var isSignal = probability >= _metadata.Threshold;
-            var signalType = prediction == 1
+            var isSignal = py.Probability >= _metadata.Threshold;
+            var signalType = py.Prediction == 1
                 ? (isSignal ? "BUY" : "BUY_LOW_CONFIDENCE")
                 : "SELL";
 
             var result = new PredictionResult
             {
-                Probability = probability,
-                Prediction = prediction,
+                Probability = py.Probability,
+                Prediction = py.Prediction,
                 IsSignal = isSignal,
                 SignalType = signalType,
                 PredictionTime = DateTime.UtcNow,
-                CandlesUsed = candles.Count,
+                CandlesUsed = py.M1CandlesAnalyzed ?? candles.Count,
+                CandlesProvided = candles.Count,
+                EffectiveInputCandlesCount = effectiveCount,
+                EffectiveInputFromUtc = effectiveFromUtc,
+                EffectiveInputToUtc = effectiveToUtc,
+                EffectiveInputFingerprint = effectiveFp,
+                PythonOutputJson = py.CompactJson,
                 Threshold = _metadata.Threshold
             };
+
+            if (py.ScriptThreshold.HasValue && Math.Abs(py.ScriptThreshold.Value - _metadata.Threshold) > 1e-9)
+                _logger.LogWarning($"Threshold mismatch: python={py.ScriptThreshold.Value:P4} metadata={_metadata.Threshold:P4}");
 
             _logger.LogInformation($"Prediction: {result.SignalType} (prob={result.Probability:P2}, threshold={_metadata.Threshold:P2})");
 
@@ -83,26 +132,36 @@ public class PredictionService
 
     /// <summary>
     /// Calls a Python subprocess to perform inference.
-    /// Returns (probability, prediction_class).
+    /// Returns the parsed python result (and a compact JSON string for easy diffing).
     /// </summary>
-    private async Task<(double probability, int prediction)> CallPythonPredictionAsync(List<Candle> candles)
-    {
-        // For now, this is a stub. In production:
-        // 1. Write candle data to a temp file (JSON/CSV)
-        // 2. Call Python inference script: python predict.py --input-file <temp> --models-dir <models>
-        // 3. Read JSON output with probability and prediction
-        // 4. Clean up temp file
+    private sealed record PythonPrediction(
+        double Probability,
+        int Prediction,
+        double? ScriptThreshold,
+        int? M1CandlesAnalyzed,
+        string RawJson,
+        string CompactJson);
 
-        var tempInputFile = Path.Combine(Path.GetTempPath(), $"predict_input_{Guid.NewGuid()}.json");
-        var tempOutputFile = Path.Combine(Path.GetTempPath(), $"predict_output_{Guid.NewGuid()}.json");
+    private async Task<PythonPrediction> CallPythonPredictionAsync(List<Candle> candles)
+    {
+        // We call the real sequence predictor pipeline:
+        //   python ml/src/scripts/predict_sequence.py --input-csv <temp.csv> --models-dir <models>
+        // It prints human-readable text + a JSON object (after the "JSON Output:" marker) to stdout.
+
+        var tempInputFile = Path.Combine(Path.GetTempPath(), $"predict_input_{Guid.NewGuid()}.csv");
 
         try
         {
-            // Write candle data to JSON
-            WriteCandlesToJson(tempInputFile, candles);
+            // Write candle data to CSV expected by predict_sequence.py
+            WriteCandlesToSemicolonCsv(tempInputFile, candles);
 
             // Call Python prediction script
-            var arguments = $"\"{Path.Combine(GetProjectRoot(), "ml/scripts/predict_single.py")}\" --input-file \"{tempInputFile}\" --models-dir \"{_modelsDirectory}\" --output-file \"{tempOutputFile}\"";
+            var projectRoot = GetProjectRoot();
+            var scriptPath = Path.Combine(projectRoot, "ml", "src", "scripts", "predict_sequence.py");
+            if (!File.Exists(scriptPath))
+                throw new FileNotFoundException($"Prediction script not found: {scriptPath}");
+
+            var arguments = $"\"{scriptPath}\" --input-csv \"{tempInputFile}\" --models-dir \"{_modelsDirectory}\"";
 
             var process = new Process
             {
@@ -110,17 +169,46 @@ public class PredictionService
                 {
                     FileName = _pythonPath,
                     Arguments = arguments,
+                    WorkingDirectory = projectRoot,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8
                 }
             };
+
+            // Ensure Python can import the repository's 'ml' package (some modules use absolute imports like 'ml.src...').
+            var existingPythonPath = process.StartInfo.Environment.ContainsKey("PYTHONPATH")
+                ? process.StartInfo.Environment["PYTHONPATH"]
+                : null;
+            process.StartInfo.Environment["PYTHONPATH"] = string.IsNullOrWhiteSpace(existingPythonPath)
+                ? projectRoot
+                : projectRoot + Path.PathSeparator + existingPythonPath;
+
+            // Ensure Python prints Unicode safely on Windows consoles.
+            process.StartInfo.Environment["PYTHONUTF8"] = "1";
+            process.StartInfo.Environment["PYTHONIOENCODING"] = "utf-8";
 
             process.Start();
             var output = await process.StandardOutput.ReadToEndAsync();
             var error = await process.StandardError.ReadToEndAsync();
-            await Task.Run(() => process.WaitForExit(30000)); // 30 second timeout
+            var exited = await Task.Run(() => process.WaitForExit(30000)); // 30 second timeout
+
+            if (!exited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // best-effort
+                }
+
+                throw new TimeoutException("Python prediction timed out after 30 seconds");
+            }
 
             if (process.ExitCode != 0)
             {
@@ -128,16 +216,59 @@ public class PredictionService
                 throw new InvalidOperationException($"Prediction script failed: {error}");
             }
 
-            // Read output
-            if (!File.Exists(tempOutputFile))
-            {
-                throw new FileNotFoundException("Prediction output file not created");
-            }
+            if (!string.IsNullOrWhiteSpace(error))
+                _logger.LogDebug($"Python stderr (exit=0): {error}");
 
-            var outputJson = File.ReadAllText(tempOutputFile);
-            // Parse JSON and extract probability and prediction
-            // For now, return dummy values - you'll implement actual parsing
-            return (probability: 0.75, prediction: 1);
+            var outputJson = ExtractJsonObjectFromStdout(output);
+            var compactJson = CompactJson(outputJson);
+            _logger.LogDebug($"Python extracted JSON (compact): {compactJson}");
+            try
+            {
+                using var doc = JsonDocument.Parse(outputJson);
+                var root = doc.RootElement;
+
+                if (!root.TryGetProperty("probability", out var probEl) || probEl.ValueKind != JsonValueKind.Number)
+                    throw new FormatException("Python output JSON missing numeric 'probability'");
+
+                var probability = probEl.GetDouble();
+
+                int prediction;
+                if (root.TryGetProperty("prediction", out var predEl) && predEl.ValueKind == JsonValueKind.Number)
+                {
+                    prediction = predEl.GetInt32();
+                }
+                else
+                {
+                    _logger.LogWarning("Python output JSON missing 'prediction'; deriving from probability and metadata threshold");
+                    prediction = probability >= _metadata.Threshold ? 1 : 0;
+                }
+
+                double? scriptThreshold = null;
+                if (root.TryGetProperty("threshold", out var thrEl) && thrEl.ValueKind == JsonValueKind.Number)
+                    scriptThreshold = thrEl.GetDouble();
+
+                int? candlesUsedByPython = null;
+                if (root.TryGetProperty("m1_candles_analyzed", out var m1El) && m1El.ValueKind == JsonValueKind.Number)
+                    candlesUsedByPython = m1El.GetInt32();
+
+                return new PythonPrediction(
+                    Probability: probability,
+                    Prediction: prediction,
+                    ScriptThreshold: scriptThreshold,
+                    M1CandlesAnalyzed: candlesUsedByPython,
+                    RawJson: outputJson,
+                    CompactJson: compactJson);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, $"Failed to parse python output JSON. Stdout: {output}. Stderr: {error}. ExtractedJson: {outputJson}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to read python prediction result. Stdout: {output}. Stderr: {error}. ExtractedJson: {outputJson}");
+                throw;
+            }
         }
         finally
         {
@@ -145,7 +276,6 @@ public class PredictionService
             try
             {
                 if (File.Exists(tempInputFile)) File.Delete(tempInputFile);
-                if (File.Exists(tempOutputFile)) File.Delete(tempOutputFile);
             }
             catch (Exception ex)
             {
@@ -155,25 +285,66 @@ public class PredictionService
     }
 
     /// <summary>
-    /// Writes candles to a JSON file for Python script consumption.
+    /// Writes candles to a semicolon-separated CSV file for predict_sequence.py consumption.
     /// </summary>
-    private void WriteCandlesToJson(string filePath, List<Candle> candles)
+    private void WriteCandlesToSemicolonCsv(string filePath, List<Candle> candles)
     {
-        var json = System.Text.Json.JsonSerializer.Serialize(
-            candles.Select(c => new
-            {
-                c.Timestamp,
-                c.Open,
-                c.High,
-                c.Low,
-                c.Close,
-                c.Volume
-            }),
-            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }
-        );
+        // predict_sequence.py expects: sep=';' and a 'Date' column.
+        using var writer = new StreamWriter(
+            filePath,
+            append: false,
+            encoding: new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-        File.WriteAllText(filePath, json);
+        writer.WriteLine("Date;Open;High;Low;Close;Volume");
+        foreach (var c in candles)
+        {
+            var dt = c.Timestamp.ToUniversalTime();
+            writer.Write(dt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+            writer.Write(';');
+            writer.Write(c.Open.ToString("R", CultureInfo.InvariantCulture));
+            writer.Write(';');
+            writer.Write(c.High.ToString("R", CultureInfo.InvariantCulture));
+            writer.Write(';');
+            writer.Write(c.Low.ToString("R", CultureInfo.InvariantCulture));
+            writer.Write(';');
+            writer.Write(c.Close.ToString("R", CultureInfo.InvariantCulture));
+            writer.Write(';');
+            writer.WriteLine(c.Volume.ToString("R", CultureInfo.InvariantCulture));
+        }
+
         _logger.LogDebug($"Wrote {candles.Count} candles to {filePath}");
+    }
+
+    private static string ExtractJsonObjectFromStdout(string stdout)
+    {
+        if (string.IsNullOrWhiteSpace(stdout))
+            throw new FormatException("Python stdout is empty; cannot extract JSON");
+
+        var marker = "JSON Output:";
+        var idx = stdout.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        var candidate = idx >= 0 ? stdout[(idx + marker.Length)..] : stdout;
+        candidate = candidate.Trim();
+
+        // Try to isolate a trailing JSON object.
+        var match = Regex.Match(candidate, "\\{[\\s\\S]*\\}\\s*$");
+        if (match.Success)
+            return match.Value.Trim();
+
+        // Fallback: attempt to parse from last '{' to end.
+        var brace = candidate.LastIndexOf('{');
+        if (brace >= 0)
+            return candidate[brace..].Trim();
+
+        throw new FormatException($"Could not locate JSON object in python stdout. Stdout was: {stdout}");
+    }
+
+    private static string CompactJson(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions
+        {
+            WriteIndented = false
+        });
     }
 
     /// <summary>
@@ -189,5 +360,58 @@ public class PredictionService
             current = current.Parent;
         }
         return AppContext.BaseDirectory;
+    }
+
+    private static string ComputeCandlesFingerprint(List<Candle> candles)
+    {
+        // Deterministic, lightweight fingerprint to confirm the effective input changed.
+        // We hash only the window that is actually used for prediction.
+        using var sha = SHA256.Create();
+
+        // Build a stable string with invariant formatting.
+        var sb = new StringBuilder(capacity: candles.Count * 64);
+        foreach (var c in candles)
+        {
+            sb.Append(c.Timestamp.ToUniversalTime().Ticks).Append('|')
+              .Append(c.Open.ToString("R", CultureInfo.InvariantCulture)).Append('|')
+              .Append(c.High.ToString("R", CultureInfo.InvariantCulture)).Append('|')
+              .Append(c.Low.ToString("R", CultureInfo.InvariantCulture)).Append('|')
+              .Append(c.Close.ToString("R", CultureInfo.InvariantCulture)).Append('|')
+              .Append(c.Volume.ToString("R", CultureInfo.InvariantCulture)).Append('\n');
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var hash = sha.ComputeHash(bytes);
+        return Convert.ToHexString(hash);
+    }
+
+    private void LogCandleStats(string label, List<Candle> candles)
+    {
+        if (candles.Count == 0)
+            return;
+
+        var first = candles[0];
+        var last = candles[^1];
+
+        var openMin = candles.Min(c => c.Open);
+        var openMax = candles.Max(c => c.Open);
+        var highMin = candles.Min(c => c.High);
+        var highMax = candles.Max(c => c.High);
+        var lowMin = candles.Min(c => c.Low);
+        var lowMax = candles.Max(c => c.Low);
+        var closeMin = candles.Min(c => c.Close);
+        var closeMax = candles.Max(c => c.Close);
+        var volMin = candles.Min(c => c.Volume);
+        var volMax = candles.Max(c => c.Volume);
+
+        _logger.LogDebug(
+            $"Stats[{label}]: count={candles.Count}, " +
+            $"first={first.Timestamp:o} O={first.Open.ToString("0.#####", CultureInfo.InvariantCulture)} H={first.High.ToString("0.#####", CultureInfo.InvariantCulture)} L={first.Low.ToString("0.#####", CultureInfo.InvariantCulture)} C={first.Close.ToString("0.#####", CultureInfo.InvariantCulture)} V={first.Volume.ToString("0.#####", CultureInfo.InvariantCulture)}, " +
+            $"last={last.Timestamp:o} O={last.Open.ToString("0.#####", CultureInfo.InvariantCulture)} H={last.High.ToString("0.#####", CultureInfo.InvariantCulture)} L={last.Low.ToString("0.#####", CultureInfo.InvariantCulture)} C={last.Close.ToString("0.#####", CultureInfo.InvariantCulture)} V={last.Volume.ToString("0.#####", CultureInfo.InvariantCulture)}, " +
+            $"range: O={openMin.ToString("0.#####", CultureInfo.InvariantCulture)}..{openMax.ToString("0.#####", CultureInfo.InvariantCulture)} " +
+            $"H={highMin.ToString("0.#####", CultureInfo.InvariantCulture)}..{highMax.ToString("0.#####", CultureInfo.InvariantCulture)} " +
+            $"L={lowMin.ToString("0.#####", CultureInfo.InvariantCulture)}..{lowMax.ToString("0.#####", CultureInfo.InvariantCulture)} " +
+            $"C={closeMin.ToString("0.#####", CultureInfo.InvariantCulture)}..{closeMax.ToString("0.#####", CultureInfo.InvariantCulture)} " +
+            $"V={volMin.ToString("0.#####", CultureInfo.InvariantCulture)}..{volMax.ToString("0.#####", CultureInfo.InvariantCulture)}");
     }
 }

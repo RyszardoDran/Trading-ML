@@ -1,3 +1,4 @@
+using System.Globalization;
 using TradingML.ModelPrediction.Models;
 
 namespace TradingML.ModelPrediction.Services;
@@ -50,11 +51,11 @@ public class CandleParser
                     var candle = new Candle
                     {
                         Timestamp = DateTime.ParseExact(parts[0].Trim(), "yyyy.MM.dd HH:mm", System.Globalization.CultureInfo.InvariantCulture),
-                        Open = double.Parse(parts[1].Trim()),
-                        High = double.Parse(parts[2].Trim()),
-                        Low = double.Parse(parts[3].Trim()),
-                        Close = double.Parse(parts[4].Trim()),
-                        Volume = double.Parse(parts[5].Trim())
+                        Open = double.Parse(parts[1].Trim(), CultureInfo.InvariantCulture),
+                        High = double.Parse(parts[2].Trim(), CultureInfo.InvariantCulture),
+                        Low = double.Parse(parts[3].Trim(), CultureInfo.InvariantCulture),
+                        Close = double.Parse(parts[4].Trim(), CultureInfo.InvariantCulture),
+                        Volume = double.Parse(parts[5].Trim(), CultureInfo.InvariantCulture)
                     };
                     candles.Add(candle);
                 }

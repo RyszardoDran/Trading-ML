@@ -36,6 +36,36 @@ public class PredictionResult
     public int CandlesUsed { get; set; }
 
     /// <summary>
+    /// Number of candles provided to the predictor (pre-filtering/selection).
+    /// </summary>
+    public int CandlesProvided { get; set; }
+
+    /// <summary>
+    /// Python's default effective input window (typically last N days) candle count.
+    /// </summary>
+    public int? EffectiveInputCandlesCount { get; set; }
+
+    /// <summary>
+    /// Python's default effective input window start time (UTC).
+    /// </summary>
+    public DateTime? EffectiveInputFromUtc { get; set; }
+
+    /// <summary>
+    /// Python's default effective input window end time (UTC).
+    /// </summary>
+    public DateTime? EffectiveInputToUtc { get; set; }
+
+    /// <summary>
+    /// Fingerprint of the effective input window to make changes obvious.
+    /// </summary>
+    public string? EffectiveInputFingerprint { get; set; }
+
+    /// <summary>
+    /// Optional compact JSON returned by the Python predictor (single line).
+    /// </summary>
+    public string? PythonOutputJson { get; set; }
+
+    /// <summary>
     /// The decision threshold used for the prediction.
     /// </summary>
     public double Threshold { get; set; }

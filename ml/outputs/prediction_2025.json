@@ -1,0 +1,18 @@
+{
+  "SignalType": "SELL",
+  "Probability": 0,
+  "Threshold": 0.63,
+  "IsSignal": false,
+  "Prediction": 0,
+  "CandlesUsed": 94728,
+  "CandlesProvided": 94728,
+  "EffectiveInputCandlesCount": 6840,
+  "EffectiveInputFromUtc": "2025-12-11T03:39:00Z",
+  "EffectiveInputToUtc": "2025-12-18T03:39:00Z",
+  "EffectiveInputFingerprint": "35108FCE5632469B8B68B2CECB9783EE54F1366E235C23535D0156A355886DD8",
+  "PredictionTime": "2025-12-19T09:28:45.9719995Z",
+  "ModelWinRate": 0.85,
+  "ModelThreshold": 0.63,
+  "FirstCandleTime": "2025-09-11T08:44:00",
+  "LastCandleTime": "2025-12-18T04:39:00"
+}
