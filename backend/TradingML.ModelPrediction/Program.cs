@@ -66,11 +66,6 @@ class Program
                     return 1;
                 }
             }
-            else if (options.SampleCandleCount > 0)
-            {
-                logger.LogInformation($"Generating {options.SampleCandleCount} sample candles");
-                candles = GenerateSampleCandles(options.SampleCandleCount);
-            }
             else
             {
                 logger.LogError("Either --candles-file or --sample must be specified");
@@ -89,18 +84,21 @@ class Program
             );
 
             logger.LogInformation("\n" + new string('=', 80));
-            logger.LogInformation("RUNNING MODEL PREDICTION");
+            logger.LogInformation("RUNNING SLIDING WINDOW PREDICTION");
             logger.LogInformation(new string('=', 80));
 
-            var result = await predictionService.PredictAsync(candles);
-
-            // Output results
-            PrintResults(result, metadata, logger);
+            // Run sliding window predictions
+            var windowResults = await RunSlidingWindowPrediction(
+                candles,
+                predictionService,
+                metadata,
+                logger
+            );
 
             // Save output if requested
             if (!string.IsNullOrEmpty(options.OutputFile))
             {
-                SaveResults(result, metadata, candles, options.OutputFile, logger);
+                SaveSlidingWindowResults(windowResults, metadata, options.OutputFile, logger);
             }
 
             return 0;
@@ -113,6 +111,87 @@ class Program
             Console.ResetColor();
             return 1;
         }
+    }
+
+    static async Task<List<SlidingWindowResult>> RunSlidingWindowPrediction(
+        List<Candle> candles,
+        PredictionService predictionService,
+        ModelMetadata metadata,
+        ConsoleLogger<Program> logger)
+    {
+        const int WINDOW_SIZE_MINUTES = 7 * 24 * 60; // 7 days in minutes
+        const int STEP_SIZE = 60; // Move 1 candle at a time
+
+        var results = new List<SlidingWindowResult>();
+
+        if (candles.Count < WINDOW_SIZE_MINUTES)
+        {
+            logger.LogError($"Insufficient candles. Need {WINDOW_SIZE_MINUTES}, have {candles.Count}");
+            return results;
+        }
+
+        logger.LogInformation($"Starting sliding window analysis: {candles.Count} candles, window size: {WINDOW_SIZE_MINUTES} minutes, step: {STEP_SIZE}");
+        logger.LogInformation($"Total windows: {candles.Count - WINDOW_SIZE_MINUTES + 1}");
+        Console.WriteLine();
+
+        int windowCount = 0;
+        int buySignalCount = 0;
+
+        for (int i = 0; i <= candles.Count - WINDOW_SIZE_MINUTES; i += STEP_SIZE)
+        {
+            // Get current window
+            var windowCandles = candles.GetRange(i, WINDOW_SIZE_MINUTES);
+            var windowEndTime = windowCandles.Last().Timestamp;
+
+            // Run prediction on this window
+            var result = await predictionService.PredictAsync(windowCandles);
+
+            windowCount++;
+
+            // Log progress
+            if (windowCount % 100 == 0)
+            {
+                logger.LogInformation($"  Processed {windowCount} windows, found {buySignalCount} BUY signals");
+            }
+
+            // Filter: only BUY signals with IsSignal = true
+            if (result.IsSignal && result.Prediction == 1)
+            {
+                buySignalCount++;
+
+                var windowResult = new SlidingWindowResult
+                {
+                    WindowIndex = windowCount - 1,
+                    EntryTime = windowEndTime,
+                    EntryPrice = result.EntryPrice,
+                    StopLoss = result.StopLoss,
+                    TakeProfit = result.TakeProfit,
+                    Probability = result.Probability,
+                    Threshold = result.Threshold,
+                    Confidence = result.Confidence,
+                    AtrM5 = result.AtrM5,
+                    SlAtrMultiplier = result.SlAtrMultiplier,
+                    TpAtrMultiplier = result.TpAtrMultiplier,
+                    RiskRewardRatio = result.RiskRewardRatio,
+                    ExpectedWinRate = result.ExpectedWinRate
+                };
+
+                results.Add(windowResult);
+
+                // Print found signal
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"✓ BUY Signal #{buySignalCount} at {windowEndTime:yyyy-MM-dd HH:mm:ss} (Window {windowCount})");
+                Console.ResetColor();
+                Console.WriteLine($"  Entry Price: {result.EntryPrice?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
+                Console.WriteLine($"  Stop Loss:   {result.StopLoss?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
+                Console.WriteLine($"  Take Profit: {result.TakeProfit?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
+                Console.WriteLine($"  Probability: {result.Probability:P2}");
+                Console.WriteLine();
+            }
+        }
+
+        logger.LogInformation($"\nAnalysis complete. Total windows: {windowCount}, BUY signals found: {buySignalCount}");
+        return results;
     }
 
     static void PrintResults(PredictionResult result, ModelMetadata metadata, ConsoleLogger<Program> logger)
@@ -183,6 +262,52 @@ class Program
 
         Console.WriteLine("╚════════════════════════════════════════════════════════════════╝");
         Console.WriteLine();
+    }
+
+    static void SaveSlidingWindowResults(
+        List<SlidingWindowResult> results,
+        ModelMetadata metadata,
+        string outputFile,
+        ConsoleLogger<Program> logger)
+    {
+        try
+        {
+            var output = new
+            {
+                TotalSignals = results.Count,
+                GeneratedAt = DateTime.UtcNow,
+                ModelThreshold = metadata.Threshold,
+                ModelWinRate = metadata.WinRate,
+                Signals = results.Select(r => new
+                {
+                    WindowIndex = r.WindowIndex,
+                    EntryTime = r.EntryTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                    EntryPrice = r.EntryPrice,
+                    StopLoss = r.StopLoss,
+                    TakeProfit = r.TakeProfit,
+                    Probability = r.Probability,
+                    Threshold = r.Threshold,
+                    Confidence = r.Confidence,
+                    AtrM5 = r.AtrM5,
+                    SlAtrMultiplier = r.SlAtrMultiplier,
+                    TpAtrMultiplier = r.TpAtrMultiplier,
+                    RiskRewardRatio = r.RiskRewardRatio,
+                    ExpectedWinRate = r.ExpectedWinRate
+                }).ToList()
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(output, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+
+            File.WriteAllText(outputFile, json);
+            logger.LogInformation($"Results saved to {outputFile}");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to save results to {outputFile}");
+        }
     }
 
     static void SaveResults(
@@ -368,4 +493,24 @@ class ArgumentParser
         Console.WriteLine("  2025-01-01 00:00:00,2000.0,2010.5,1995.3,2005.2,100000");
         Console.WriteLine();
     }
+}
+
+/// <summary>
+/// Represents a single BUY signal from sliding window analysis.
+/// </summary>
+class SlidingWindowResult
+{
+    public int WindowIndex { get; set; }
+    public DateTime EntryTime { get; set; }
+    public double? EntryPrice { get; set; }
+    public double? StopLoss { get; set; }
+    public double? TakeProfit { get; set; }
+    public double Probability { get; set; }
+    public double Threshold { get; set; }
+    public string? Confidence { get; set; }
+    public double? AtrM5 { get; set; }
+    public double? SlAtrMultiplier { get; set; }
+    public double? TpAtrMultiplier { get; set; }
+    public double? RiskRewardRatio { get; set; }
+    public double? ExpectedWinRate { get; set; }
 }

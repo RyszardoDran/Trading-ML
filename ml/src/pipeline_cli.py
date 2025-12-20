@@ -13,6 +13,19 @@ Usage:
 import argparse
 from typing import Optional
 
+# Import canonical parameters from risk_config
+from ml.src.utils.risk_config import (
+    ENABLE_M5_ALIGNMENT,
+    ENABLE_PULLBACK_FILTER,
+    ENABLE_TREND_FILTER,
+    MIN_PRECISION_THRESHOLD,
+    PULLBACK_MAX_RSI_M5,
+    SL_ATR_MULTIPLIER,
+    TP_ATR_MULTIPLIER,
+    TREND_MIN_ADX,
+    TREND_MIN_DIST_SMA200,
+)
+
 
 def parse_cli_arguments() -> argparse.Namespace:
     """Parse command-line arguments for sequence XGBoost training pipeline.
@@ -55,14 +68,14 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--atr-multiplier-sl",
         type=float,
-        default=0.1,
-        help="ATR multiplier for stop-loss level (default: 0.1 - OPTION B optimized for recall >= 20%)",
+        default=SL_ATR_MULTIPLIER,
+        help=f"ATR multiplier for stop-loss level (default: {SL_ATR_MULTIPLIER} - from risk_config.py)",
     )
     parser.add_argument(
         "--atr-multiplier-tp",
         type=float,
-        default=0.2,
-        help="ATR multiplier for take-profit level (default: 0.2 - OPTION B optimized for recall >= 20%)",
+        default=TP_ATR_MULTIPLIER,
+        help=f"ATR multiplier for take-profit level (default: {TP_ATR_MULTIPLIER} - from risk_config.py)",
     )
     parser.add_argument(
         "--min-hold-minutes",
@@ -126,8 +139,8 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--min-precision",
         type=float,
-        default=0.85,
-        help="Minimum precision (win rate) floor for threshold selection (default: 0.85)",
+        default=MIN_PRECISION_THRESHOLD,
+        help=f"Minimum precision (win rate) floor for threshold selection (default: {MIN_PRECISION_THRESHOLD})",
     )
     parser.add_argument(
         "--min-trades",
@@ -167,14 +180,14 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--trend-min-dist-sma200",
         type=float,
-        default=0.0,
-        help="Minimum normalized distance above SMA200 when trend filter enabled (default: 0.0)",
+        default=TREND_MIN_DIST_SMA200,
+        help=f"Minimum normalized distance above SMA200 when trend filter enabled (default: {TREND_MIN_DIST_SMA200})",
     )
     parser.add_argument(
         "--trend-min-adx",
         type=float,
-        default=15.0,
-        help="Minimum ADX threshold when trend filter enabled (default: 15.0)",
+        default=TREND_MIN_ADX,
+        help=f"Minimum ADX threshold when trend filter enabled (default: {TREND_MIN_ADX})",
     )
     
     # ===== Pullback filter =====
@@ -186,8 +199,8 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--pullback-max-rsi-m5",
         type=float,
-        default=75.0,
-        help="Maximum RSI_M5 allowed when pullback filter enabled (default: 75.0)",
+        default=PULLBACK_MAX_RSI_M5,
+        help=f"Maximum RSI_M5 allowed when pullback filter enabled (default: {PULLBACK_MAX_RSI_M5})",
     )
     
     args = parser.parse_args()

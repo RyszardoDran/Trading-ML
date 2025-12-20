@@ -45,49 +45,9 @@ public class PredictionService
             _logger.LogWarning($"Insufficient candles: {candles.Count} < {_metadata.RecommendedMinCandles}");
         }
 
-        _logger.LogInformation($"Starting prediction with {candles.Count} candles");
+     //   _logger.LogInformation($"Starting prediction with {candles.Count} candles");
 
-        // For diagnostics we fingerprint only the effective model window.
-        // For prediction we pass the full candle context to the Python pipeline.
-        var recentCandles = candles.TakeLast(_metadata.WindowSize).ToList();
-        if (recentCandles.Count < _metadata.WindowSize)
-            _logger.LogWarning($"Requested window size {_metadata.WindowSize} but only {recentCandles.Count} candles available");
 
-        var fingerprint = ComputeCandlesFingerprint(recentCandles);
-        var lastCloseStr = recentCandles.Last().Close.ToString("0.#####", CultureInfo.InvariantCulture);
-        _logger.LogInformation(
-            $"Input summary: total={candles.Count}, used={recentCandles.Count}, " +
-            $"totalRange={candles.First().Timestamp:o}..{candles.Last().Timestamp:o}, " +
-            $"usedRange={recentCandles.First().Timestamp:o}..{recentCandles.Last().Timestamp:o}, " +
-            $"lastClose={lastCloseStr}, fp={fingerprint}");
-
-        LogCandleStats("context", candles);
-        LogCandleStats("window", recentCandles);
-
-        // predict_sequence.py loads last N days by default (N=7 in current script).
-        // Compute and carry this into the final result so run summaries are self-explanatory.
-        int? effectiveCount = null;
-        DateTime? effectiveFromUtc = null;
-        DateTime? effectiveToUtc = null;
-        string? effectiveFp = null;
-        try
-        {
-            var cutoff = candles.Last().Timestamp.AddDays(-7);
-            var lastNDays = candles.Where(c => c.Timestamp >= cutoff).ToList();
-            if (lastNDays.Count > 0)
-            {
-                effectiveCount = lastNDays.Count;
-                effectiveFromUtc = lastNDays.First().Timestamp.ToUniversalTime();
-                effectiveToUtc = lastNDays.Last().Timestamp.ToUniversalTime();
-                effectiveFp = ComputeCandlesFingerprint(lastNDays);
-                _logger.LogDebug(
-                    $"Python-effective input (default 7d): count={effectiveCount}, range={effectiveFromUtc:o}..{effectiveToUtc:o}, fp={effectiveFp}");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to compute effective-window fingerprint");
-        }
 
         try
         {
@@ -108,10 +68,6 @@ public class PredictionService
                 PredictionTime = DateTime.UtcNow,
                 CandlesUsed = py.M1CandlesAnalyzed ?? candles.Count,
                 CandlesProvided = candles.Count,
-                EffectiveInputCandlesCount = effectiveCount,
-                EffectiveInputFromUtc = effectiveFromUtc,
-                EffectiveInputToUtc = effectiveToUtc,
-                EffectiveInputFingerprint = effectiveFp,
                 EntryPrice = py.EntryPrice,
                 AtrM5 = py.AtrM5,
                 StopLoss = py.StopLoss,
