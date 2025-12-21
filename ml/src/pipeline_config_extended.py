@@ -53,6 +53,9 @@ class PipelineParams:
         min_precision: Minimum precision threshold (0-1)
         min_trades: Minimum predicted positives (None = dynamic)
         max_trades_per_day: Cap trades per day (None = unlimited)
+        use_ev_optimization: Use Expected Value optimization instead of F1
+        ev_win_coefficient: Profit multiplier for correct predictions
+        ev_loss_coefficient: Loss multiplier for incorrect predictions
         
     Attributes (M5 alignment filter):
         enable_m5_alignment: Enable M5 candle close alignment
@@ -89,8 +92,13 @@ class PipelineParams:
     
     # Threshold optimization
     min_precision: float
+    min_recall: float
     min_trades: Optional[int]
     max_trades_per_day: Optional[int]
+    use_ev_optimization: bool
+    use_hybrid_optimization: bool
+    ev_win_coefficient: float
+    ev_loss_coefficient: float
     
     # M5 alignment filter
     enable_m5_alignment: bool
@@ -128,8 +136,13 @@ class PipelineParams:
             custom_end_hour=args.custom_end_hour,
             max_windows=args.max_windows,
             min_precision=args.min_precision,
+            min_recall=args.min_recall,
             min_trades=args.min_trades,
             max_trades_per_day=args.max_trades_per_day,
+            use_ev_optimization=args.use_ev_optimization,
+            use_hybrid_optimization=args.use_hybrid_optimization,
+            ev_win_coefficient=args.ev_win_coefficient,
+            ev_loss_coefficient=args.ev_loss_coefficient,
             enable_m5_alignment=not args.skip_m5_alignment,
             enable_trend_filter=not args.disable_trend_filter,
             trend_min_dist_sma200=None if args.disable_trend_filter else args.trend_min_dist_sma200,

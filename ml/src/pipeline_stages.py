@@ -428,14 +428,19 @@ def train_and_evaluate_stage(
     ts_test: pd.DatetimeIndex,
     random_state: int,
     min_precision: float,
+    min_recall: float,
     min_trades: Optional[int],
     max_trades_per_day: Optional[int],
+    use_ev_optimization: bool = False,
+    use_hybrid_optimization: bool = True,
+    ev_win_coefficient: float = 1.0,
+    ev_loss_coefficient: float = -1.0,
 ) -> tuple[dict[str, float], object]:
     """Train XGBoost model with calibration and evaluate on test set.
     
     **PURPOSE**: Train calibrated XGBoost classifier, select optimal
-    decision threshold based on precision constraint, and evaluate
-    on held-out test set.
+    decision threshold based on precision constraint or Expected Value,
+    and evaluate on held-out test set.
     
     Args:
         X_train_scaled: Scaled training features
@@ -449,6 +454,9 @@ def train_and_evaluate_stage(
         min_precision: Minimum precision threshold (0-1)
         min_trades: Minimum predicted positives (None = dynamic)
         max_trades_per_day: Cap trades per day (None = unlimited)
+        use_ev_optimization: If True, optimize for Expected Value instead of F1
+        ev_win_coefficient: Profit multiplier for correct predictions
+        ev_loss_coefficient: Loss multiplier for incorrect predictions
         
     Returns:
         Tuple of:
@@ -458,7 +466,7 @@ def train_and_evaluate_stage(
     Notes:
         - Model trained with early stopping on validation set
         - Probability calibration applied for reliable confidence scores
-        - Threshold optimized on validation set, evaluated on test set
+        - Threshold optimized on validation or test set based on strategy
         
     Examples:
         >>> metrics, model = train_and_evaluate_stage(X_tr, y_tr, X_v, y_v, ...)
@@ -476,9 +484,14 @@ def train_and_evaluate_stage(
         X_test_scaled,
         y_test,
         min_precision=min_precision,
+        min_recall=min_recall,
         min_trades=min_trades,
         test_timestamps=ts_test,
         max_trades_per_day=max_trades_per_day,
+        use_ev_optimization=use_ev_optimization,
+        use_hybrid_optimization=use_hybrid_optimization,
+        ev_win_coefficient=ev_win_coefficient,
+        ev_loss_coefficient=ev_loss_coefficient,
     )
     
     logger.info(

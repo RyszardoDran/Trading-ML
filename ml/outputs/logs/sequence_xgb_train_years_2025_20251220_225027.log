@@ -1,0 +1,108 @@
+2025-12-20 22:50:27 - ml.src.pipeline_config_extended - INFO - Pipeline configuration validated successfully
+2025-12-20 22:50:27 - __main__ - INFO - 
+================================================================================
+2025-12-20 22:50:27 - __main__ - INFO - SEQUENCE XGBoost TRAINING PIPELINE - XAU/USD 1-Minute Data
+2025-12-20 22:50:27 - __main__ - INFO - ================================================================================
+2025-12-20 22:50:27 - __main__ - INFO - Log file: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\logs\sequence_xgb_train_years_2025_20251220_225027.log
+2025-12-20 22:50:27 - __main__ - INFO - Start time: 2025-12-20 22:50:27
+2025-12-20 22:50:27 - __main__ - INFO - Data years: [2025]
+2025-12-20 22:50:27 - __main__ - INFO - 
+Pipeline Configuration:
+2025-12-20 22:50:27 - __main__ - INFO -   Feature engineering version: v1
+2025-12-20 22:50:27 - __main__ - INFO -   Window size: 100 candles
+2025-12-20 22:50:27 - __main__ - INFO -   ATR SL multiplier: 1x (from risk_config.py)
+2025-12-20 22:50:27 - __main__ - INFO -   ATR TP multiplier: 2x (from risk_config.py)
+2025-12-20 22:50:27 - __main__ - INFO -   Min hold time: 5 minutes
+2025-12-20 22:50:27 - __main__ - INFO -   Max horizon: 60 candles
+2025-12-20 22:50:27 - __main__ - INFO -   Trading session: london_ny
+2025-12-20 22:50:27 - __main__ - INFO -   Min precision threshold: 0.7
+2025-12-20 22:50:27 - __main__ - INFO -   M5 alignment filter: enabled
+2025-12-20 22:50:27 - __main__ - INFO -   Trend filter: enabled
+2025-12-20 22:50:27 - __main__ - INFO -   Pullback filter: enabled
+2025-12-20 22:50:27 - __main__ - INFO -   Random state: 42
+2025-12-20 22:50:27 - __main__ - INFO - ================================================================================
+
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Loading data from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-20 22:50:27 - ml.src.data_loading.loaders - INFO - Year filter applied: loading only [2025]
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Loaded 18,875 rows from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Date range: 2025-12-01 00:00:00 to 2025-12-18 17:39:00
+2025-12-20 22:50:27 - ml.src.pipeline_stages - WARNING - window_size parameter is deprecated and ignored (passed: 100)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - WARNING - feature_version parameter is deprecated and ignored (passed: v1)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Aggregating M1 data to M5 timeframe...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Aggregating 18875 M1 candles to M5...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Aggregated to 3776 M5 candles (5.0x compression)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Aggregated 18,875 M1 candles → 3,776 M5 candles (20.0% compression)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Engineering technical features on M5 timeframe (with M15/M60 context)...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Engineering M5 features...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Aggregating 3776 M1 candles to M5...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Aggregated to 3776 M5 candles (1.0x compression)
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Computing M5 primary features...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Computing M15 context from M5...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Computing M60 context from M5...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - M5 feature engineering complete: 3776 rows × 18 features
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Timeframe: M5 (5-minute candles)
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Date range: 2025-12-01 00:00:00 to 2025-12-18 17:35:00
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Features shape: (3776, 18)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Feature columns: 18
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Aggregating 18875 M1 candles to M5...
+2025-12-20 22:50:27 - ml.src.features.engineer_m5 - INFO - Aggregated to 3776 M5 candles (5.0x compression)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Creating targets on M5 timeframe (SL=1×ATR, TP=2×ATR, min_hold=5 M5 candles, max_horizon=60 M5 candles)
+2025-12-20 22:50:27 - ml.src.targets.target_maker - INFO - Creating targets (SL/TP simulation) for 3,776 candles...
+2025-12-20 22:50:27 - ml.src.targets.target_maker - INFO - Parameters: SL=1×ATR, TP=2×ATR, min_hold=5min, max_horizon=60min
+2025-12-20 22:50:27 - ml.src.targets.target_maker - INFO - Calculating M1 ATR(14) for SL/TP targets (fallback)
+2025-12-20 22:50:27 - ml.src.targets.target_maker - INFO - Target creation complete: 3,716 valid targets
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Targets shape: 3716
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Positive class (win): 1,290 (34.71%)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Negative class (loss): 2,426 (65.29%)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Creating sequences on M5 timeframe (window_size=100 M5 candles = 500 minutes)...
+2025-12-20 22:50:27 - ml.src.pipeline_stages - WARNING - M5 alignment filter is DISABLED for M5 data (data already M5-aligned)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Filter config: m5_alignment=False (already M5), trend=True, pullback=True, max_windows=200,000
+2025-12-20 22:50:27 - ml.src.sequences.sequencer - INFO - M5 alignment filter disabled; keeping all timestamps irrespective of minute alignment
+2025-12-20 22:50:27 - ml.src.sequences.sequencer - INFO - Applied Trend Filter (dist_sma_200 > 0.00, ADX > 15.00): kept 0/3617 (0.0%)
+2025-12-20 22:50:27 - ml.src.sequences.sequencer - INFO - Applied Pullback Filter (RSI_M5 < 75.00): kept 3617/3617 (100.0%)
+2025-12-20 22:50:27 - ml.src.sequences.sequencer - WARNING - Session filter 'london_ny' removed all data!
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Sequences created: X.shape=(0,), y.shape=(0,)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Positive class in sequences: 0.0 (nan%)
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Splitting data chronologically (train/val/test)...
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Using percentage split (70/15/15) for year_filter=[2025]
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Split sizes: train=0, val=0, test=0
+2025-12-20 22:50:27 - ml.src.pipeline_stages - INFO - Scaling features with RobustScaler (robust to outliers)...
+2025-12-20 22:50:27 - __main__ - ERROR - Training pipeline failed: Expected 2D array, got 1D array instead:
+array=[].
+Reshape your data either using array.reshape(-1, 1) if your data has a single feature or array.reshape(1, -1) if it contains a single sample.
+Traceback (most recent call last):
+  File "C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\pipelines\sequence_training_pipeline.py", line 325, in <module>
+    metrics = run_pipeline(params)
+  File "C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\pipelines\sequence_training_pipeline.py", line 236, in run_pipeline
+     scaler) = split_and_scale_stage(
+               ~~~~~~~~~~~~~~~~~~~~~^
+        X=X,
+        ^^^^
+    ...<2 lines>...
+        year_filter=params.year_filter,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\pipeline_stages.py", line 406, in split_and_scale_stage
+    X_train_scaled = scaler.fit_transform(X_train).astype(np.float32)
+                     ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\Arek\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sklearn\utils\_set_output.py", line 316, in wrapped
+    data_to_wrap = f(self, X, *args, **kwargs)
+  File "C:\Users\Arek\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sklearn\base.py", line 894, in fit_transform
+    return self.fit(X, **fit_params).transform(X)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Arek\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sklearn\base.py", line 1365, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "C:\Users\Arek\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sklearn\preprocessing\_data.py", line 1638, in fit
+    X = validate_data(
+        self,
+    ...<3 lines>...
+        ensure_all_finite="allow-nan",
+    )
+  File "C:\Users\Arek\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sklearn\utils\validation.py", line 2954, in validate_data
+    out = check_array(X, input_name="X", **check_params)
+  File "C:\Users\Arek\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sklearn\utils\validation.py", line 1091, in check_array
+    raise ValueError(msg)
+ValueError: Expected 2D array, got 1D array instead:
+array=[].
+Reshape your data either using array.reshape(-1, 1) if your data has a single feature or array.reshape(1, -1) if it contains a single sample.

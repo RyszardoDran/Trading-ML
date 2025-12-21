@@ -7,11 +7,20 @@
   "macd_hist_m5",
   "atr_norm_m5",
   "adx",
+  "cvd_m5",
   "dist_sma_200",
   "ret_1_m5",
+  "obv_m5",
+  "mfi_m5",
+  "volume_m5_norm",
   "rsi_m15",
   "bb_pos_m15",
   "dist_sma_20_m15",
+  "cvd_m15",
+  "obv_m15",
+  "volume_m15_norm",
   "rsi_m60",
-  "bb_pos_m60"
+  "bb_pos_m60",
+  "cvd_m60",
+  "obv_m60"
 ]

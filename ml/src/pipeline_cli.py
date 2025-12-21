@@ -18,13 +18,29 @@ from ml.src.utils.risk_config import (
     ENABLE_M5_ALIGNMENT,
     ENABLE_PULLBACK_FILTER,
     ENABLE_TREND_FILTER,
+    EV_LOSS_COEFFICIENT,
+    EV_WIN_COEFFICIENT,
+    MAX_HORIZON_M5_CANDLES,
+    MAX_TRADES_PER_DAY,
+    MIN_HOLD_M5_CANDLES,
     MIN_PRECISION_THRESHOLD,
+    MIN_RECALL_FLOOR,
+    MIN_TRADES_PER_TEST,
     PULLBACK_MAX_RSI_M5,
     SL_ATR_MULTIPLIER,
     TP_ATR_MULTIPLIER,
     TREND_MIN_ADX,
     TREND_MIN_DIST_SMA200,
+    USE_EV_OPTIMIZATION,
+    USE_HYBRID_OPTIMIZATION,
+    WINDOW_SIZE,
 )
+
+# Compute inversion flags for filters based on risk_config defaults
+# (CLI uses --disable-X flags which are "store_true", so we invert the risk_config values)
+_SKIP_M5_ALIGNMENT_DEFAULT = not ENABLE_M5_ALIGNMENT
+_DISABLE_TREND_FILTER_DEFAULT = not ENABLE_TREND_FILTER
+_DISABLE_PULLBACK_FILTER_DEFAULT = not ENABLE_PULLBACK_FILTER
 
 
 def parse_cli_arguments() -> argparse.Namespace:
@@ -62,8 +78,8 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--window-size",
         type=int,
-        default=60,
-        help="Number of previous candles to use as input features (default: 60)",
+        default=WINDOW_SIZE,
+        help=f"Number of previous candles to use as input features (default: {WINDOW_SIZE} - from risk_config.py)",
     )
     parser.add_argument(
         "--atr-multiplier-sl",
@@ -80,14 +96,14 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--min-hold-minutes",
         type=int,
-        default=5,
-        help="Minimum holding time in minutes for target calculation (default: 5)",
+        default=MIN_HOLD_M5_CANDLES,
+        help=f"Minimum holding time in M5 candles for target calculation (default: {MIN_HOLD_M5_CANDLES})",
     )
     parser.add_argument(
         "--max-horizon",
         type=int,
-        default=60,
-        help="Maximum forward candles to simulate for target labels (default: 60)",
+        default=MAX_HORIZON_M5_CANDLES,
+        help=f"Maximum forward M5 candles to simulate for target labels (default: {MAX_HORIZON_M5_CANDLES})",
     )
     
     # ===== Reproducibility =====
@@ -145,14 +161,46 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--min-trades",
         type=int,
-        default=None,
-        help="Minimum number of predicted positives for threshold (dynamic if None, default: None)",
+        default=MIN_TRADES_PER_TEST,
+        help=f"Minimum number of predicted positives for threshold (default: {MIN_TRADES_PER_TEST})",
     )
     parser.add_argument(
         "--max-trades-per-day",
         type=int,
-        default=None,
-        help="Cap number of predicted trades per day after thresholding (unlimited if None, default: None)",
+        default=MAX_TRADES_PER_DAY,
+        help=f"Cap number of predicted trades per day after thresholding (default: {MAX_TRADES_PER_DAY})",
+    )
+    
+    # ===== Expected Value (EV) Optimization =====
+    parser.add_argument(
+        "--use-ev-optimization",
+        type=lambda x: x.lower() in ('true', '1', 'yes'),
+        default=USE_EV_OPTIMIZATION,
+        help="Use Expected Value optimization for threshold selection (default: False from risk_config.py)",
+    )
+    parser.add_argument(
+        "--use-hybrid-optimization",
+        type=lambda x: x.lower() in ('true', '1', 'yes'),
+        default=USE_HYBRID_OPTIMIZATION,
+        help="Use Hybrid optimization: EV with precision AND recall floors (RECOMMENDED, default: True)",
+    )
+    parser.add_argument(
+        "--min-recall",
+        type=float,
+        default=MIN_RECALL_FLOOR,
+        help=f"Minimum recall floor for hybrid optimization (default: {MIN_RECALL_FLOOR})",
+    )
+    parser.add_argument(
+        "--ev-win-coefficient",
+        type=float,
+        default=EV_WIN_COEFFICIENT,
+        help=f"Profit multiplier for correct predictions in EV mode (default: {EV_WIN_COEFFICIENT})",
+    )
+    parser.add_argument(
+        "--ev-loss-coefficient",
+        type=float,
+        default=EV_LOSS_COEFFICIENT,
+        help=f"Loss multiplier for incorrect predictions in EV mode (default: {EV_LOSS_COEFFICIENT})",
     )
     
     # ===== Feature engineering version =====
@@ -168,14 +216,16 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--skip-m5-alignment",
         action="store_true",
-        help="Disable M5 candle close alignment filter (default: enabled)",
+        default=_SKIP_M5_ALIGNMENT_DEFAULT,
+        help=f"Disable M5 candle close alignment filter (default: {'disabled' if _SKIP_M5_ALIGNMENT_DEFAULT else 'enabled'} from risk_config.py)",
     )
     
     # ===== Trend filter =====
     parser.add_argument(
         "--disable-trend-filter",
         action="store_true",
-        help="Disable trend filter requiring price above SMA200 and ADX threshold",
+        default=_DISABLE_TREND_FILTER_DEFAULT,
+        help=f"Disable trend filter requiring price above SMA200 and ADX threshold (default: {'disabled' if _DISABLE_TREND_FILTER_DEFAULT else 'enabled'} from risk_config.py)",
     )
     parser.add_argument(
         "--trend-min-dist-sma200",
@@ -194,7 +244,8 @@ def parse_cli_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--disable-pullback-filter",
         action="store_true",
-        help="Disable RSI_M5 pullback guard filter",
+        default=_DISABLE_PULLBACK_FILTER_DEFAULT,
+        help=f"Disable RSI_M5 pullback guard filter (default: {'disabled' if _DISABLE_PULLBACK_FILTER_DEFAULT else 'enabled'} from risk_config.py)",
     )
     parser.add_argument(
         "--pullback-max-rsi-m5",

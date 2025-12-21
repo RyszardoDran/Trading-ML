@@ -251,8 +251,13 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         ts_test=ts_test,
         random_state=params.random_state,
         min_precision=params.min_precision,
+        min_recall=params.min_recall,
         min_trades=params.min_trades,
         max_trades_per_day=params.max_trades_per_day,
+        use_ev_optimization=params.use_ev_optimization,
+        use_hybrid_optimization=params.use_hybrid_optimization,
+        ev_win_coefficient=params.ev_win_coefficient,
+        ev_loss_coefficient=params.ev_loss_coefficient,
     )
     
     # ===== STAGE 7: Save artifacts =====
@@ -310,10 +315,21 @@ if __name__ == "__main__":
     logger.info(f"  Window size: {params.window_size} candles")
     logger.info(f"  ATR SL multiplier: {params.atr_multiplier_sl}x (from risk_config.py)")
     logger.info(f"  ATR TP multiplier: {params.atr_multiplier_tp}x (from risk_config.py)")
-    logger.info(f"  Min hold time: {params.min_hold_minutes} minutes")
-    logger.info(f"  Max horizon: {params.max_horizon} candles")
+    logger.info(f"  Min hold time: {params.min_hold_minutes} M5 candles")
+    logger.info(f"  Max horizon: {params.max_horizon} M5 candles")
     logger.info(f"  Trading session: {params.session}")
-    logger.info(f"  Min precision threshold: {params.min_precision}")
+    if params.use_hybrid_optimization:
+        logger.info(f"  Threshold optimization: HYBRID (EV with precision AND recall floors)")
+        logger.info(f"    - Min precision: {params.min_precision}")
+        logger.info(f"    - Min recall: {params.min_recall}")
+        logger.info(f"    - Win coefficient: {params.ev_win_coefficient}")
+        logger.info(f"    - Loss coefficient: {params.ev_loss_coefficient}")
+    elif params.use_ev_optimization:
+        logger.info(f"  Threshold optimization: Expected Value (EV)")
+        logger.info(f"    - Win coefficient: {params.ev_win_coefficient}")
+        logger.info(f"    - Loss coefficient: {params.ev_loss_coefficient}")
+    else:
+        logger.info(f"  Threshold optimization: F1-optimized (min_precision={params.min_precision})")
     logger.info(f"  M5 alignment filter: {'enabled' if params.enable_m5_alignment else 'disabled'}")
     logger.info(f"  Trend filter: {'enabled' if params.enable_trend_filter else 'disabled'}")
     logger.info(f"  Pullback filter: {'enabled' if params.enable_pullback_filter else 'disabled'}")

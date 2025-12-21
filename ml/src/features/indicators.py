@@ -231,6 +231,34 @@ def compute_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
     return obv
 
 
+def compute_cvd(open_p: pd.Series, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> pd.Series:
+    """Compute Cumulative Volume Delta (CVD) approximation.
+    
+    Uses intra-bar price action to estimate buy/sell volume delta.
+    Formula: Delta = Volume * (Close - Open) / (High - Low)
+    
+    Args:
+        open_p: Open prices
+        high: High prices
+        low: Low prices
+        close: Close prices
+        volume: Volume data
+        
+    Returns:
+        CVD values (cumulative sum of estimated deltas)
+    """
+    # Calculate price range
+    price_range = high - low
+    
+    # Estimate delta: (Close - Open) / (High - Low) * Volume
+    # If High == Low, delta is 0
+    delta = (close - open_p) / (price_range + 1e-9) * volume
+    
+    # Cumulative sum
+    cvd = delta.cumsum()
+    return cvd
+
+
 def compute_roc(close: pd.Series, period: int = 5) -> pd.Series:
     """Compute Rate of Change (ROC).
     
@@ -257,3 +285,79 @@ def compute_volatility(returns: pd.Series, period: int = 20) -> pd.Series:
         Volatility values
     """
     return returns.rolling(period, min_periods=1).std()
+
+def compute_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
+    """Compute On-Balance Volume (OBV).
+    
+    OBV accumulates volume with sign based on price direction:
+    - Add volume if close > previous close
+    - Subtract volume if close < previous close
+    
+    Args:
+        close: Close prices
+        volume: Trading volume
+    
+    Returns:
+        OBV values (cumulative)
+    """
+    obv = pd.Series(0.0, index=close.index)
+    obv_val = 0.0
+    
+    for i in range(len(close)):
+        if i == 0:
+            obv_val = 0.0
+        elif close.iloc[i] > close.iloc[i - 1]:
+            obv_val += volume.iloc[i]
+        elif close.iloc[i] < close.iloc[i - 1]:
+            obv_val -= volume.iloc[i]
+        # If close == close, OBV stays same
+        
+        obv.iloc[i] = obv_val
+    
+    return obv
+
+
+def compute_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> pd.Series:
+    """Compute Money Flow Index (MFI).
+    
+    MFI combines price action with volume to create a momentum oscillator (0-100).
+    Similar to RSI but volume-weighted.
+    
+    Args:
+        high: High prices
+        low: Low prices
+        close: Close prices
+        volume: Trading volume
+        period: Lookback period (default: 14)
+    
+    Returns:
+        MFI values (0-100)
+    """
+    # Typical Price = (High + Low + Close) / 3
+    tp = (high + low + close) / 3.0
+    
+    # Raw Money Flow = Typical Price * Volume
+    rmf = tp * volume
+    
+    # Positive/Negative Money Flow
+    positive_mf = pd.Series(0.0, index=close.index)
+    negative_mf = pd.Series(0.0, index=close.index)
+    
+    for i in range(1, len(tp)):
+        if tp.iloc[i] > tp.iloc[i - 1]:
+            positive_mf.iloc[i] = rmf.iloc[i]
+        elif tp.iloc[i] < tp.iloc[i - 1]:
+            negative_mf.iloc[i] = rmf.iloc[i]
+        # If TP == TP, nothing is added (neutral)
+    
+    # Sum over period
+    positive_flow = positive_mf.rolling(period, min_periods=1).sum()
+    negative_flow = negative_mf.rolling(period, min_periods=1).sum()
+    
+    # Money Flow Ratio
+    mfr = positive_flow / (negative_flow + 1e-9)
+    
+    # MFI = 100 - (100 / (1 + MFR))
+    mfi = 100.0 - (100.0 / (1.0 + mfr))
+    
+    return mfi.astype(np.float32)
