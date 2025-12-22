@@ -245,61 +245,76 @@ X_train_scaled = scaler.transform(X_train)
 
 ### Code Style & Conventions
 
-**Type Hints** (Gdzie mają sens):
+**Małe, samodzielnie się opisujące skrypty**:
 ```python
-# ✅ GOOD - Type hints help readability
-def load_data(
-    filepath: str,
-    symbol: str,
-    start_date: Optional[datetime] = None,
-) -> pd.DataFrame:
-    """Load OHLCV data from CSV."""
+# ✅ GOOD - Mały, jasny skrypt (jedna odpowiedzialność)
+# Plik: ml/scripts/calculate_daily_metrics.py
+from ml.src.backtesting import calculate_monthly_metrics
 
-# ✅ ALSO OK - bez types dla internal helpers
+def main():
+    """Calculate daily metrics for live trading."""
+    results = calculate_monthly_metrics(load_live_results())
+    print(results[['win_rate', 'n_trades', 'profit']])
+
+if __name__ == '__main__':
+    main()
+
+# ❌ WRONG - Wielki plik (500+ linii, wiele funkcji)
+# Plik: ml/src/mega_analysis.py
+# Robi: data loading, cleaning, analysis, plotting, alerts...
+```
+
+**Type Hints** (Na public functions):
+```python
+# ✅ GOOD - Jasne type hints
+def load_data(filepath: str, symbol: str) -> pd.DataFrame:
+    """Load OHLCV data from CSV."""
+    return pd.read_csv(filepath)
+
+# ✅ ALSO OK - Bez types dla wewnętrznych helperów
 def _process_row(row):
-    # Internal helper, types less critical
     return row['Close'] * 1.05
 ```
 
-**Docstrings** (Praktycznie, nie over-document):
+**Docstrings** (Praktycznie):
 ```python
-def engineer_features(
-    df_m5: pd.DataFrame,
-    window_size: int = 14,
-) -> pd.DataFrame:
-    """Engineer technical features from M5 OHLCV data.
-    
-    Takes M5 data and adds SMA, RSI, ATR and other indicators.
-    Returns same data with new feature columns.
-    
-    Args:
-        df_m5: M5-aggregated OHLCV
-        window_size: Period for moving averages (default 14)
-        
-    Returns:
-        DataFrame with original + engineered features
-        
-    Examples:
-        >>> features = engineer_features(df_m5)
-        >>> features.shape[1]  # More columns now
-    """
+# ✅ GOOD - Krótki docstring
+def engineer_features(df_m5: pd.DataFrame) -> pd.DataFrame:
+    """Engineer 57 technical features from M5 OHLCV data."""
+    return df_m5  # z nowymi kolumnami
+
+# ✅ GOOD - Sama nazwa opisuje co robi
+# Plik: ml/scripts/analyze_feature_importance.py
+# Kod sam-opisujący - jasne nazwy zmiennych
 ```
 
-Notes: Don't over-document obvious things. Code should be clear enough.
+Notes:
+- Nazwa pliku = opis co robi
+- Funkcje publiczne mają docstring
+- Kod powinien być sam-opisujący
 
-**Logging** (Nie print!):
+**Logging** (Nie print! - Mały, dedykowany moduł):
 ```python
+# ✅ CORRECT - Mały moduł do loggingu
+# Plik: ml/src/utils/logger.py (~30 linii)
 import logging
-logger = logging.getLogger(__name__)
 
-# ✅ CORRECT
+def setup_logger(name):
+    logger = logging.getLogger(name)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
+
+# Użycie w innym pliku
+logger = setup_logger(__name__)
 logger.info(f"Loaded {len(df)} rows for {symbol}")
 logger.warning(f"Missing data: {missing_pct:.2%}")
 logger.error(f"Invalid prices in {n_invalid} rows", exc_info=True)
 
 # ❌ WRONG
-print("Loaded data")  # Nie widać w logach
-print(df)            # Za dużo info
+print("Loaded data")  # Nie widać w logach, trudno szukać
 ```
 
 **Constants & Config**:
@@ -430,38 +445,42 @@ print(monthly[['win_rate', 'n_trades', 'total_return']])
 ### Scenario 1: Dodaj nowy feature
 
 ```python
-# 1. Dodaj do feature engineering
-# Plik: ml/src/features/engineer.py
+# 1. Utwórz mały, fokusowany helper
+# Plik: ml/src/features/engineer_volume.py (MAŁY! ~20 linii)
 
-def engineer_features(df_m5, window_size=14):
-    # ... istniejące features ...
-    
-    # Nowy feature: np. Volume Rate of Change
-    df_m5['volume_roc'] = df_m5['Volume'].pct_change(5)
-    
+def calculate_volume_roc(df: pd.DataFrame, period: int = 5) -> pd.Series:
+    """Calculate Volume Rate of Change."""
+    return df['Volume'].pct_change(period)
+
+# 2. Zintegruj w głównym engineerze
+# Plik: ml/src/features/engineer.py
+from ml.src.features.engineer_volume import calculate_volume_roc
+
+def engineer_features(df_m5: pd.DataFrame) -> pd.DataFrame:
+    df_m5['volume_roc'] = calculate_volume_roc(df_m5)
     return df_m5
 
-# 2. Napisz test
-# Plik: ml/tests/test_features.py
+# 3. Test dla małego modułu
+# Plik: ml/tests/test_engineer_volume.py (MAŁY! ~15 linii)
+from ml.src.features.engineer_volume import calculate_volume_roc
 
 def test_volume_roc():
-    df = pd.DataFrame({
-        'Volume': [100, 110, 120, 130, 140, 150]
-    })
-    result = engineer_features(df)
-    assert 'volume_roc' in result.columns
-    assert result['volume_roc'].notna().sum() >= 1
+    df = pd.DataFrame({'Volume': [100, 110, 120, 130, 140, 150]})
+    result = calculate_volume_roc(df)
+    assert result.notna().sum() >= 1
 
-# 3. Run pipeline
+# 4. Run pipeline & porównaj metrics
 python ml/src/pipelines/sequence_training_pipeline.py
-
-# 4. Compare metrics
-# Stary model: win_rate=0.68
-# Nowy model:  win_rate=0.70 ✅ Poprawa!
+# Stary: win_rate=0.68, Nowy: win_rate=0.70 ✅
 
 # 5. Commit
-git commit -m "feat: Add volume_roc feature for volatility context"
+git commit -m "feat: Add volume_roc to feature engineering"
 ```
+
+**Kluczowo**: 
+- ✅ Każda funkcjonalność w **małym, jasnym pliku**
+- ✅ Jedna odpowiedzialność per plik
+- ✅ Plik się sam opisuje (nazwa + struktura)
 
 ### Scenario 2: Optymalizuj threshold
 
@@ -663,6 +682,33 @@ if calculate_data_drift(live_features, training_features) > 0.30:
 
 ---
 
+
+## 🤝 Agile Manifesto w praktyce ML
+
+**Jak ML-Specialist realizuje Manifest Agile:**
+
+- **Ludzie i interakcje ponad procesy i narzędzia**
+    - Kod i workflow są proste, czytelne, łatwe do zmiany przez każdego w zespole
+    - Komunikacja i feedback są kluczowe (agent zawsze pyta, nie narzuca)
+
+- **Działające rozwiązania ponad obszerną dokumentację**
+    - Każdy skrypt jest mały, samodzielny, łatwy do uruchomienia i testowania
+    - Dokumentacja jest praktyczna, nie rozbudowana dla zasady
+
+- **Współpraca z klientem ponad negocjację kontraktów**
+    - Agent wspiera iteracyjne zmiany, szybkie prototypowanie, szybki feedback
+    - Zmiana wymagań jest naturalna – kod i workflow są elastyczne
+
+- **Reagowanie na zmiany ponad podążanie za planem**
+    - Kod modularny, łatwy do refaktoryzacji, bez monolitów
+    - Każda funkcjonalność to mały, jasny plik/skrypt – zmiana nie boli
+
+**W skrócie:**
+- Minimalizm, prostota, szybka iteracja, feedback, zmiana mile widziana
+- Kod = narzędzie do rozwiązywania problemów, nie cel sam w sobie
+- Agent = partner, nie kontroler
+
+---
 ## Podsumowanie
 
 **Jesteś teraz ML Specialist** dla projektu XAU/USD sequence modeling. Znasz:
