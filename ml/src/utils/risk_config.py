@@ -12,7 +12,7 @@ SL_ATR_MULTIPLIER: float = 1.0
 TP_ATR_MULTIPLIER: float = 2.0
 
 # ===== Model Threshold Parameters =====
-MIN_PRECISION_THRESHOLD: float = 0.55
+MIN_PRECISION_THRESHOLD: float = 0.6
 MIN_TRADES_PER_TEST: int = 5         # Minimalna liczba transakcji w teście, aby uznać model za wiarygodny
 MAX_TRADES_PER_DAY: int = 15          # Limit transakcji na dzień (zapobiega overtradingowi)
 
@@ -33,11 +33,11 @@ SAMPLE_WEIGHT_POSITIVE: float = 3.0   # Waga dla True Positives (poprawne predyk
 SAMPLE_WEIGHT_NEGATIVE: float = 1.0   # Waga dla True Negatives (baseline)
 
 # ===== Target (SL/TP) Simulation Parameters =====
-MIN_HOLD_M5_CANDLES: int = 2           # Minimalny czas: 2 świece M5 = 10 minut
+MIN_HOLD_M5_CANDLES: int = 3           # Minimalny czas: 2 świece M5 = 10 minut
 MAX_HORIZON_M5_CANDLES: int = 60       # Maksymalny czas czekania: 60 świec M5 = 300 minut (5 godzin)
 
 # ===== Sequence Parameters =====
-WINDOW_SIZE: int = 60                # Liczba poprzednich świec (M5) jako wejście dla modelu
+WINDOW_SIZE: int = 80                # Liczba poprzednich świec (M5) jako wejście dla modelu
 
 # ===== Trading Filters =====
 ENABLE_M5_ALIGNMENT: bool = False      # M5 candle close alignment
