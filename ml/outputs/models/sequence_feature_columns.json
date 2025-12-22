@@ -8,6 +8,8 @@
   "atr_norm_m5",
   "adx",
   "cvd_m5",
+  "dist_sma_200_m5",
+  "dist_sma_200_m15",
   "dist_sma_200",
   "ret_1_m5",
   "obv_m5",

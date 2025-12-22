@@ -54,7 +54,13 @@ public class PredictionService
             // Call Python prediction script (pass full context; Python uses last window internally)
             var py = await CallPythonPredictionAsync(candles);
 
-            var isSignal = py.Probability >= _metadata.Threshold;
+            // Prefer Python-provided threshold when available to avoid decision mismatch
+            var usedThreshold = py.ScriptThreshold ?? _metadata.Threshold;
+
+            if (py.ScriptThreshold.HasValue && Math.Abs(py.ScriptThreshold.Value - _metadata.Threshold) > 1e-9)
+                _logger.LogWarning($"Threshold mismatch: python={py.ScriptThreshold.Value:P4} metadata={_metadata.Threshold:P4} — using python threshold");
+
+            var isSignal = py.Probability >= usedThreshold;
             var signalType = py.Prediction == 1
                 ? (isSignal ? "BUY" : "BUY_LOW_CONFIDENCE")
                 : "SELL";
@@ -78,13 +84,10 @@ public class PredictionService
                 ExpectedWinRate = py.ExpectedWinRate,
                 Confidence = py.Confidence,
                 PythonOutputJson = py.CompactJson,
-                Threshold = _metadata.Threshold
+                Threshold = usedThreshold
             };
 
-            if (py.ScriptThreshold.HasValue && Math.Abs(py.ScriptThreshold.Value - _metadata.Threshold) > 1e-9)
-                _logger.LogWarning($"Threshold mismatch: python={py.ScriptThreshold.Value:P4} metadata={_metadata.Threshold:P4}");
-
-            _logger.LogInformation($"Prediction: {result.SignalType} (prob={result.Probability:P2}, threshold={_metadata.Threshold:P2})");
+            _logger.LogInformation($"Prediction: {result.SignalType} (prob={result.Probability:P2}, threshold={usedThreshold:P2})");
 
             return result;
         }
@@ -162,6 +165,8 @@ public class PredictionService
                 throw new FileNotFoundException($"Prediction script not found: {scriptPath}");
 
             var arguments = $"\"{scriptPath}\" --input-csv \"{tempInputFile}\" --models-dir \"{_modelsDirectory}\"";
+
+            _logger.LogDebug($"Calling Python subprocess: {_pythonPath} {arguments}");
 
             var process = new Process
             {

@@ -54,6 +54,7 @@ import json
 import logging
 import pickle
 import sys
+import os
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -73,6 +74,7 @@ sys.path.insert(0, str(ml_dir))
 # Now import using ml.src package path
 from src.features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
 from src.features.indicators import compute_atr
+from src.filters.regime_filter import should_trade
 from src.utils.risk_config import ATR_PERIOD_M5, SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER, risk_reward_ratio
 
 # Suppress sklearn version warnings
@@ -251,11 +253,28 @@ def predict(
     
     model = artifacts["model"]
     feature_columns = artifacts["feature_columns"]
-    threshold = artifacts["threshold"]
+    saved_threshold = float(artifacts["threshold"])
     win_rate = artifacts["win_rate"]
     window_size = artifacts["window_size"]
     analysis_window_days = artifacts["analysis_window_days"]
     scaler = artifacts.get("scaler")
+
+    # Apply optional production min threshold override via MIN_PROD_THRESHOLD env var
+    min_prod_env = os.getenv("MIN_PROD_THRESHOLD")
+    threshold_used = float(saved_threshold)
+    threshold_source = "saved"
+    if min_prod_env is not None:
+        try:
+            min_prod_val = float(min_prod_env)
+            if min_prod_val > threshold_used:
+                threshold_used = min_prod_val
+                threshold_source = "env_min_override"
+        except ValueError:
+            logger.warning(f"Invalid MIN_PROD_THRESHOLD='{min_prod_env}'; ignoring")
+
+    logger.info(
+        f"Using threshold={threshold_used:.4f} (saved={saved_threshold:.4f}, source={threshold_source})"
+    )
 
     if scaler is None:
         raise ValueError("Scaler artifact missing; retrain pipeline to regenerate artifacts")
@@ -321,7 +340,8 @@ def predict(
 
     rr = risk_reward_ratio()
     common_result = {
-        "threshold": float(threshold),
+        "threshold": float(threshold_used),
+        "threshold_source": threshold_source,
         "m1_candles_analyzed": m1_candles_count,
         "m5_candles_generated": len(candles_m5),
         "m5_candles_used_for_prediction": window_size,
@@ -385,7 +405,7 @@ def predict(
     # Predict
     logger.info("Running prediction...")
     proba = model.predict_proba(X)[0, 1]
-    prediction = int(proba >= threshold)
+    prediction = int(proba >= threshold_used)
 
     # Confidence level
     if proba >= 0.7 or proba <= 0.3:
@@ -394,6 +414,29 @@ def predict(
         confidence = "medium"
     else:
         confidence = "low"
+
+    # Regime filter: suppress trades in poor regimes (quick production safeguard)
+    try:
+        last_feat = features.iloc[-1]
+        adx = float(last_feat.get("adx", np.nan))
+        dist_sma = float(last_feat.get("dist_sma_200", np.nan))
+        sma200 = entry_price - dist_sma if not pd.isna(dist_sma) else float("nan")
+
+        allowed, regime, reason = should_trade(
+            atr_m5 if atr_m5 is not None else 0.0,
+            adx,
+            entry_price,
+            sma200,
+            threshold=threshold_used,
+        )
+    except Exception as e:
+        logger.exception("Regime check failed; proceeding without regime gating")
+        allowed, regime, reason = True, "UNKNOWN", "failed_check"
+
+    if not allowed:
+        logger.info(f"Regime gating suppressed trade: regime={regime}, reason={reason}")
+        prediction = 0
+
 
     sl = None
     tp = None
@@ -409,6 +452,9 @@ def predict(
         "confidence": confidence,
         "sl": sl,
         "tp": tp,
+        "regime": regime,
+        "regime_allowed": bool(allowed),
+        "regime_reason": reason,
     }
 
     return result

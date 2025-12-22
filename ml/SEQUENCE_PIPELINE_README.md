@@ -194,6 +194,11 @@ Confidence:        HIGH
 ✅ MODEL RECOMMENDS: BUY
    Based on the last 100 candles, the model predicts a 73.45% chance
    of achieving the target return. Historical win rate: 68.23%
+
+**Note:** To enforce a stricter production threshold set the environment variable `MIN_PROD_THRESHOLD`. The final threshold used is
+`max(saved_threshold, MIN_PROD_THRESHOLD)` which helps raise live precision at the expense of fewer signals.
+
+**Regime gating:** A market regime filter (`ENABLE_REGIME_FILTER` in `risk_config.py`) is applied during prediction to suppress signals in low-ATR or non-trending regimes (recommended to avoid low-quality signals).
 ```
 
 **JSON Output (for programmatic use):**

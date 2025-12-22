@@ -319,8 +319,7 @@ O: TAK - kod jest production-ready z error handling i logging
 O: Python subprocess ~2-5s. ONNX będzie <10ms (future)
 
 **P: Mogę zmienić threshold?**  
-O: Model wczytuje z `sequence_threshold.json`, ale można override'ować
-
+O: Model wczytuje z `sequence_threshold.json`, ale można override'ować (np. ustaw `MIN_PROD_THRESHOLD` env var aby wymusić konserwatywny próg).
 **P: Czy są testy?**  
 O: TAK - 8 unit testów (xUnit), uruchom: `dotnet test`
 

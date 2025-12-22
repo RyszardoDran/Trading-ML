@@ -616,6 +616,88 @@ class TestPredictSequence:
         assert result["sl"] == pytest.approx(expected_entry - expected_atr)
         assert result["tp"] == pytest.approx(expected_entry + 2.0 * expected_atr)
 
+    def test_predict_respects_min_prod_threshold(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When MIN_PROD_THRESHOLD is set it should override saved threshold (if larger)."""
+        window_size = 2
+        feature_columns = ["dist_sma_200", "adx"]
+        feature_index = pd.date_range("2024-02-01 09:00", periods=window_size, freq="5min")
+        feature_df = pd.DataFrame(
+            {
+                "dist_sma_200": [0.10, 0.20],
+                "adx": [20.0, 25.0],
+            },
+            index=feature_index,
+        )
+
+        scaler = RobustScaler()
+        scaler.fit(np.array([[0.0, 0.0, 0.0, 0.0], [5.0, 5.0, 5.0, 5.0]], dtype=np.float32))
+
+        candles_m5 = pd.DataFrame(
+            {
+                "Open": [101.0, 102.0],
+                "High": [103.0, 104.0],
+                "Low": [100.0, 101.0],
+                "Close": [102.0, 103.0],
+                "Volume": [1_000.0, 1_100.0],
+            },
+            index=feature_index,
+        )
+
+        def fake_aggregate_to_m5(_: pd.DataFrame) -> pd.DataFrame:
+            return candles_m5
+
+        def fake_engineer_m5_candle_features(_: pd.DataFrame) -> pd.DataFrame:
+            return feature_df
+
+        # Case A: model probability below env min => prediction should be 0
+        model_low = self._DummyModel(proba=0.4)
+
+        def fake_load_model_artifacts_low(_: Path) -> dict[str, object]:
+            return {
+                "model": model_low,
+                "feature_columns": feature_columns,
+                "threshold": 0.2249,
+                "win_rate": 0.7,
+                "window_size": window_size,
+                "analysis_window_days": 7,
+                "scaler": scaler,
+            }
+
+        monkeypatch.setenv("MIN_PROD_THRESHOLD", "0.5")
+        # Force regime check to allow trade in unit test (avoid NaN ATR issues)
+        monkeypatch.setattr(predict_sequence_module, "should_trade", lambda *args, **kwargs: (True, "TEST", "ok"))
+        monkeypatch.setattr(predict_sequence_module, "aggregate_to_m5", fake_aggregate_to_m5)
+        monkeypatch.setattr(
+            predict_sequence_module,
+            "engineer_m5_candle_features",
+            fake_engineer_m5_candle_features,
+        )
+        monkeypatch.setattr(predict_sequence_module, "load_model_artifacts", fake_load_model_artifacts_low)
+
+        result_low = predict_sequence_module.predict(candles_m5.copy(), Path("unused"))
+        assert result_low["threshold"] == pytest.approx(0.5)
+        assert result_low["prediction"] == 0
+
+        # Case B: model probability above env min => prediction should be 1
+        model_high = self._DummyModel(proba=0.6)
+
+        def fake_load_model_artifacts_high(_: Path) -> dict[str, object]:
+            return {
+                "model": model_high,
+                "feature_columns": feature_columns,
+                "threshold": 0.2249,
+                "win_rate": 0.7,
+                "window_size": window_size,
+                "analysis_window_days": 7,
+                "scaler": scaler,
+            }
+
+        monkeypatch.setattr(predict_sequence_module, "load_model_artifacts", fake_load_model_artifacts_high)
+
+        result_high = predict_sequence_module.predict(candles_m5.copy(), Path("unused"))
+        assert result_high["threshold"] == pytest.approx(0.5)
+        assert result_high["prediction"] == 1
+
     def test_predict_returns_consistent_schema_on_trend_filter(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Early-return filters should still include SL/TP keys and candle counts."""
         window_size = 2

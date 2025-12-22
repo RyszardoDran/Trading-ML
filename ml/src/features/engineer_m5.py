@@ -210,9 +210,13 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     else:
         cvd_norm = pd.Series(0.0, index=df_m5.index)
     
-    # SMA 200 moved to M15 context for longer trend perspective
+    # SMA 200 on M5 (200-period on M5 = 1000 minutes = 16.7 hours)
+    sma_200 = close.rolling(200, min_periods=1).mean()
+    dist_sma_200_m5 = (close - sma_200) / (atr_14 + 1e-9)
     
-    # Returns on M5
+    # No M15 alignment here (handled later after M15 is computed)
+    # Continue with M5-derived short-term features
+    ret_1 = close.pct_change().fillna(0)
     ret_1 = close.pct_change().fillna(0)
     
     # OBV (On-Balance Volume) on M5
@@ -287,12 +291,30 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     
     # Align M15 to M5 index (backward-fill to avoid lookahead)
     # Use bfill instead of ffill: at time T, use PREVIOUS M15 bar that closed BEFORE T
-    rsi_m15 = rsi_m15.reindex(df_m5.index, method='bfill').fillna(50)
-    bb_pos_m15 = bb_pos_m15.reindex(df_m5.index, method='bfill').fillna(0.5)
-    dist_sma_20_m15 = dist_sma_20_m15.reindex(df_m5.index, method='bfill').fillna(0)
-    dist_sma_200 = dist_sma_200_m15.reindex(df_m5.index, method='bfill').fillna(0)
-    volume_m15_norm = volume_m15_norm.reindex(df_m5.index, method='bfill').fillna(1.0)
-    cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='bfill').fillna(0)
+    try:
+        rsi_m15 = rsi_m15.reindex(df_m5.index, method='bfill').fillna(50)
+    except Exception:
+        rsi_m15 = pd.Series(50.0, index=df_m5.index)
+    try:
+        bb_pos_m15 = bb_pos_m15.reindex(df_m5.index, method='bfill').fillna(0.5)
+    except Exception:
+        bb_pos_m15 = pd.Series(0.5, index=df_m5.index)
+    try:
+        dist_sma_20_m15 = dist_sma_20_m15.reindex(df_m5.index, method='bfill').fillna(0)
+    except Exception:
+        dist_sma_20_m15 = pd.Series(0.0, index=df_m5.index)
+    try:
+        dist_sma_200 = dist_sma_200_m15.reindex(df_m5.index, method='bfill').fillna(0)
+    except Exception:
+        dist_sma_200 = pd.Series(0.0, index=df_m5.index)
+    try:
+        volume_m15_norm = volume_m15_norm.reindex(df_m5.index, method='bfill').fillna(1.0)
+    except Exception:
+        volume_m15_norm = pd.Series(1.0, index=df_m5.index)
+    try:
+        cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='bfill').fillna(0)
+    except Exception:
+        cvd_m15_norm = pd.Series(0.0, index=df_m15.index)
     
     # ========== M60 Context (from M5) ==========
     logger.info("Computing M60 context from M5...")
@@ -395,8 +417,15 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         features_dict["cvd_m5"] = pd.Series(0.0, index=df_m5.index)
         
     if FEAT_ENABLE_SMA200:
-        features_dict["dist_sma_200"] = dist_sma_200.fillna(0)
+        # Keep original M5 SMA200 distance for backwards compatibility
+        features_dict["dist_sma_200_m5"] = dist_sma_200_m5.fillna(0)
+        # Add M15 SMA200 distance as a separate feature for model to learn longer-term trend
+        features_dict["dist_sma_200_m15"] = dist_sma_200_m15.reindex(df_m5.index, method='bfill').fillna(0)
+        # Preserve legacy 'dist_sma_200' name as the M5 version (used by filters by default)
+        features_dict["dist_sma_200"] = dist_sma_200_m5.fillna(0)
     else:
+        features_dict["dist_sma_200_m5"] = pd.Series(0.0, index=df_m5.index)
+        features_dict["dist_sma_200_m15"] = pd.Series(0.0, index=df_m5.index)
         features_dict["dist_sma_200"] = pd.Series(0.0, index=df_m5.index)
         
     if FEAT_ENABLE_RETURNS:

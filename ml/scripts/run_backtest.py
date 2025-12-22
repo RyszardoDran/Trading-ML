@@ -42,6 +42,7 @@ from ml.src.backtesting.position_sizer import PositionSizingMethod
 from ml.src.data_loading import load_all_years
 from ml.src.scripts.predict_sequence import load_model_artifacts
 from ml.src.features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
+from ml.src.filters import should_trade
 from ml.src.utils import PipelineConfig
 
 # Setup logging
@@ -132,6 +133,13 @@ def parse_args() -> argparse.Namespace:
     )
     
     parser.add_argument(
+        '--threshold-override',
+        type=float,
+        default=None,
+        help='Override model threshold (e.g., 0.3 to allow more trades)'
+    )
+    
+    parser.add_argument(
         '--max-trades-per-day',
         type=int,
         default=None,
@@ -202,6 +210,7 @@ def load_data_and_predict(
     data_dir: Path,
     models_dir: Path,
     year_filter: Optional[list[int]] = None,
+    threshold_override: Optional[float] = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load data and generate predictions using optimized M5 approach.
     
@@ -240,6 +249,10 @@ def load_data_and_predict(
     logger.info(f"Model window size: {window_size_m5} M5 candles")
     logger.info(f"Decision threshold: {threshold:.4f}")
     
+    if threshold_override is not None:
+        threshold = threshold_override
+        logger.info(f"Threshold overridden to {threshold:.4f}")
+    
     # OPTIMIZATION: Aggregate M1→M5 ONCE at the start
     logger.info(f"\n{'='*80}")
     logger.info("AGGREGATING M1 → M5 (ONE-TIME OPERATION)")
@@ -273,6 +286,7 @@ def load_data_and_predict(
     predictions_list = []
     
     # Slide window over M5 data
+    suppressed_count = 0
     for i in range(min_m5_candles, len(m5_features)):
         # Extract window of M5 features
         feature_window = m5_features.iloc[i-window_size_m5:i]
@@ -287,6 +301,22 @@ def load_data_and_predict(
         proba = model.predict_proba(X)[0, 1]
         prediction = 1 if proba >= threshold else 0
         
+        # Apply regime filter if prediction is BUY
+        regime = None
+        reason = None
+        if prediction == 1:
+            # Get features from the last M5 candle
+            last_features = feature_window.iloc[-1]
+            atr_m5 = last_features['atr']
+            adx = last_features['adx']
+            entry_price = m5_data.loc[m5_timestamp, 'Close']
+            sma200 = last_features['sma200']
+            
+            allowed, regime, reason = should_trade(atr_m5, adx, entry_price, sma200)
+            if not allowed:
+                prediction = 0
+                suppressed_count += 1
+        
         # Map back to M1 timestamp (last M1 candle of this M5 candle)
         m5_timestamp = m5_data.index[i]
         
@@ -298,6 +328,8 @@ def load_data_and_predict(
             'probability': proba,
             'prediction': prediction,
             'threshold': threshold,
+            'regime': regime,
+            'reason': reason,
         })
         
         # Progress logging
@@ -317,6 +349,16 @@ def load_data_and_predict(
     logger.info(f"  Avg probability: {predictions_df['probability'].mean():.4f}")
     logger.info(f"  Min probability: {predictions_df['probability'].min():.4f}")
     logger.info(f"  Max probability: {predictions_df['probability'].max():.4f}")
+    
+    # Regime filter summary
+    regime_signals = predictions_df[predictions_df['regime'].notna()]
+    if len(regime_signals) > 0:
+        logger.info(f"\nRegime filter applied to {len(regime_signals):,} signals:")
+        logger.info(f"  Allowed: {(regime_signals['prediction']==1).sum():,} ({(regime_signals['prediction']==1).sum()/len(regime_signals)*100:.2f}%)")
+        logger.info(f"  Suppressed: {(regime_signals['prediction']==0).sum():,} ({(regime_signals['prediction']==0).sum()/len(regime_signals)*100:.2f}%)")
+        reason_counts = regime_signals['reason'].value_counts()
+        for reason, count in reason_counts.items():
+            logger.info(f"    {reason}: {count:,} ({count/len(regime_signals)*100:.2f}%)")
     
     return predictions_df, m1_prices
 
@@ -396,6 +438,7 @@ def main() -> int:
             data_dir=data_dir,
             models_dir=models_dir,
             year_filter=args.years,
+            threshold_override=args.threshold_override,
         )
         
         # Create backtest configuration
