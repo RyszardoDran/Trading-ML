@@ -8,6 +8,13 @@ A custom agent is a bundled set of instructions, constraints, and examples that 
 
 ## Agents in this repository
 
+### Domain-Specific Agents
+- [ML Specialist](ML-Specialist.agent.md) - **XAU/USD Sequence Model Expert** (4000+ lines of knowledge)
+  - 📚 Documentation: [`.github/instructions/ml-specialist-guide/`](../instructions/ml-specialist-guide/)
+  - 🎯 Expertise: Sequence-based trading model, feature engineering, production ML
+  - 👤 Persona: Senior ML Engineer with 20+ years experience
+
+### General Agents
 - [Code Reviewer](CodeReviewer.agent.md)
 - [Developer](Developer.agent.md)
 - [Tester](Tester.agent.md)
