@@ -197,9 +197,11 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
     features = engineer_features_stage(df_m1, window_size=params.window_size, feature_version=params.feature_version)
     
     # CRITICAL: Get M5 aggregated data for target creation
-    # We need to re-aggregate M1→M5 for make_target() to work on M5 timeframe
+    # Use only the date range present in features to avoid leakage
     from ml.src.features.engineer_m5 import aggregate_to_m5
-    df_m5 = aggregate_to_m5(df_m1)
+    features_start = features.index.min()
+    features_end = features.index.max()
+    df_m5 = aggregate_to_m5(df_m1, start_date=str(features_start), end_date=str(features_end))
     
     # ===== STAGE 3: Create targets on M5 timeframe =====
     targets = create_targets_stage(
@@ -230,59 +232,156 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
     )
     
     # ===== STAGE 5: Split and scale =====
-    (X_train_scaled, X_val_scaled, X_test_scaled,
-     y_train, y_val, y_test,
-     ts_train, ts_val, ts_test,
-     scaler) = split_and_scale_stage(
+    split_result = split_and_scale_stage(
         X=X,
         y=y,
         timestamps=timestamps,
         year_filter=params.year_filter,
+        use_timeseries_cv=params.use_timeseries_cv,
+        cv_folds=params.cv_folds,
     )
     
-    # ===== STAGE 6: Train and evaluate =====
-    metrics, model = train_and_evaluate_stage(
-        X_train_scaled=X_train_scaled,
-        y_train=y_train,
-        X_val_scaled=X_val_scaled,
-        y_val=y_val,
-        X_test_scaled=X_test_scaled,
-        y_test=y_test,
-        ts_test=ts_test,
-        random_state=params.random_state,
-        min_precision=params.min_precision,
-        min_recall=params.min_recall,
-        min_trades=params.min_trades,
-        max_trades_per_day=params.max_trades_per_day,
-        use_ev_optimization=params.use_ev_optimization,
-        use_hybrid_optimization=params.use_hybrid_optimization,
-        ev_win_coefficient=params.ev_win_coefficient,
-        ev_loss_coefficient=params.ev_loss_coefficient,
-        use_cost_sensitive_learning=params.use_cost_sensitive_learning,
-        sample_weight_positive=params.sample_weight_positive,
-        sample_weight_negative=params.sample_weight_negative,
-    )
+    if params.use_timeseries_cv:
+        # ===== STAGE 6: Train and evaluate (CV mode) =====
+        from ml.src.utils.timeseries_validation import TimeSeriesValidator
+        
+        validator = TimeSeriesValidator(n_splits=params.cv_folds)
+        all_metrics = []
+        last_model = None  # Store last fold's model for artifact saving
+        
+        for fold_data in split_result:
+            fold_num = fold_data['fold']
+            X_train_scaled = fold_data['X_train_scaled']
+            X_val_scaled = fold_data['X_val_scaled']
+            X_test_scaled = fold_data['X_test_scaled']
+            y_train = fold_data['y_train']
+            y_val = fold_data['y_val']
+            y_test = fold_data['y_test']
+            
+            logger.info(f"\n{'='*60}")
+            logger.info(f"FOLD {fold_num + 1} / {params.cv_folds}")
+            logger.info(f"{'='*60}")
+            
+            # Train model on this fold
+            metrics, model = train_and_evaluate_stage(
+                X_train_scaled=X_train_scaled,
+                y_train=y_train,
+                X_val_scaled=X_val_scaled,  # Now we have validation set for threshold optimization
+                y_val=y_val,
+                X_test_scaled=X_test_scaled,
+                y_test=y_test,
+                ts_test=fold_data['timestamps_test'],
+                random_state=params.random_state,
+                min_precision=params.min_precision,
+                min_recall=params.min_recall,
+                min_trades=params.min_trades,
+                max_trades_per_day=params.max_trades_per_day,
+                use_ev_optimization=params.use_ev_optimization,
+                use_hybrid_optimization=params.use_hybrid_optimization,
+                ev_win_coefficient=params.ev_win_coefficient,
+                ev_loss_coefficient=params.ev_loss_coefficient,
+                use_cost_sensitive_learning=params.use_cost_sensitive_learning,
+                sample_weight_positive=params.sample_weight_positive,
+                sample_weight_negative=params.sample_weight_negative,
+            )
+            
+            # Store last fold's model for artifact saving
+            last_model = model
+            
+            # Evaluate fold
+            validator.evaluate_fold(
+                y_true=y_test,
+                y_pred_proba=model.predict_proba(X_test_scaled)[:, 1],
+                threshold=metrics['threshold'],
+                fold_num=fold_num + 1
+            )
+            
+            all_metrics.append(metrics)
+        
+        # ===== STAGE 7: Aggregate CV results =====
+        final_metrics = validator.aggregate_metrics()
+        final_metrics['threshold'] = np.mean([m['threshold'] for m in all_metrics])  # Average threshold
+        
+        # Use last fold's model and scaler for saving artifacts
+        last_fold_data = split_result[-1]
+        model = last_model  # Use the stored last model
+        scaler = last_fold_data['scaler']
+        
+        # Save artifacts for CV mode
+        threshold_strategy = (
+            "hybrid" if params.use_hybrid_optimization else "ev" if params.use_ev_optimization else "f1"
+        )
+        save_model_artifacts(
+            model=model,
+            scaler=scaler,
+            feature_columns=list(features.columns),
+            models_dir=models_dir,
+            threshold=final_metrics["threshold"],
+            win_rate=final_metrics["precision_mean"],  # Use precision_mean as win_rate for CV
+            window_size=params.window_size,
+            analysis_window_days=7,  # Recommend 7 days for robust indicator calculation
+            max_trades_per_day=params.max_trades_per_day,
+            min_precision=params.min_precision,
+            min_recall=params.min_recall,
+            threshold_strategy=threshold_strategy,
+        )
+        
+    else:
+        # ===== STAGE 6: Train and evaluate (single split mode) =====
+        (X_train_scaled, X_val_scaled, X_test_scaled,
+         y_train, y_val, y_test,
+         ts_train, ts_val, ts_test,
+         scaler) = split_result
+        
+        final_metrics, model = train_and_evaluate_stage(
+            X_train_scaled=X_train_scaled,
+            y_train=y_train,
+            X_val_scaled=X_val_scaled,
+            y_val=y_val,
+            X_test_scaled=X_test_scaled,
+            y_test=y_test,
+            ts_test=ts_test,
+            random_state=params.random_state,
+            min_precision=params.min_precision,
+            min_recall=params.min_recall,
+            min_trades=params.min_trades,
+            max_trades_per_day=params.max_trades_per_day,
+            use_ev_optimization=params.use_ev_optimization,
+            use_hybrid_optimization=params.use_hybrid_optimization,
+            ev_win_coefficient=params.ev_win_coefficient,
+            ev_loss_coefficient=params.ev_loss_coefficient,
+            use_cost_sensitive_learning=params.use_cost_sensitive_learning,
+            sample_weight_positive=params.sample_weight_positive,
+            sample_weight_negative=params.sample_weight_negative,
+        )
     
     # ===== STAGE 7: Save artifacts =====
-    threshold_strategy = (
-        "hybrid" if params.use_hybrid_optimization else "ev" if params.use_ev_optimization else "f1"
-    )
-    save_model_artifacts(
-        model=model,
-        scaler=scaler,
-        feature_columns=list(features.columns),
-        models_dir=models_dir,
-        threshold=metrics["threshold"],
-        win_rate=metrics["win_rate"],
-        window_size=params.window_size,
-        analysis_window_days=7,  # Recommend 7 days for robust indicator calculation
-        max_trades_per_day=params.max_trades_per_day,
-        min_precision=params.min_precision,
-        min_recall=params.min_recall,
-        threshold_strategy=threshold_strategy,
-    )
+    if params.use_timeseries_cv:
+        # In CV mode, we don't save a single model - just log aggregated results
+        logger.info("CV mode: Skipping model artifacts save (multiple models per fold)")
+        logger.info(f"CV Results: precision={final_metrics.get('precision_mean', 'N/A'):.3f}±{final_metrics.get('precision_std', 'N/A'):.3f}, "
+                   f"recall={final_metrics.get('recall_mean', 'N/A'):.3f}±{final_metrics.get('recall_std', 'N/A'):.3f}")
+    else:
+        # Single split mode - save model artifacts
+        threshold_strategy = (
+            "hybrid" if params.use_hybrid_optimization else "ev" if params.use_ev_optimization else "f1"
+        )
+        save_model_artifacts(
+            model=model,
+            scaler=scaler,
+            feature_columns=list(features.columns),
+            models_dir=models_dir,
+            threshold=final_metrics["threshold"],
+            win_rate=final_metrics["win_rate"],
+            window_size=params.window_size,
+            analysis_window_days=7,  # Recommend 7 days for robust indicator calculation
+            max_trades_per_day=params.max_trades_per_day,
+            min_precision=params.min_precision,
+            min_recall=params.min_recall,
+            threshold_strategy=threshold_strategy,
+        )
     
-    return metrics
+    return final_metrics
 
 
 
@@ -356,15 +455,28 @@ if __name__ == "__main__":
         print("=" * 60)
         print(f"Window Size:       {params.window_size} candles")
         print(f"Threshold:         {metrics['threshold']:.2f}")
-        print(f"WIN RATE:          {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
-        print(f"Precision:         {metrics['precision']:.4f}")
-        print(f"Recall:            {metrics['recall']:.4f}")
-        print(f"F1 Score:          {metrics['f1']:.4f}")
-        print(f"ROC-AUC:           {metrics['roc_auc']:.4f}")
-        print(f"PR-AUC:            {metrics['pr_auc']:.4f}")
+        
+        # Handle CV vs single split metrics
+        if params.use_timeseries_cv:
+            print(f"WIN RATE:          {metrics['precision_mean']:.4f} ± {metrics['precision_std']:.4f} ({metrics['precision_mean']:.2%})")
+            print(f"Precision:         {metrics['precision_mean']:.4f} ± {metrics['precision_std']:.4f}")
+            print(f"Recall:            {metrics['recall_mean']:.4f} ± {metrics['recall_std']:.4f}")
+            print(f"F1 Score:          {metrics['f1_mean']:.4f} ± {metrics['f1_std']:.4f}")
+            print(f"ROC-AUC:           {metrics['roc_auc_mean']:.4f} ± {metrics['roc_auc_std']:.4f}")
+            print(f"PR-AUC:            {metrics['pr_auc_mean']:.4f} ± {metrics['pr_auc_std']:.4f}")
+            win_rate_display = metrics['precision_mean']
+        else:
+            print(f"WIN RATE:          {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
+            print(f"Precision:         {metrics['precision']:.4f}")
+            print(f"Recall:            {metrics['recall']:.4f}")
+            print(f"F1 Score:          {metrics['f1']:.4f}")
+            print(f"ROC-AUC:           {metrics['roc_auc']:.4f}")
+            print(f"PR-AUC:            {metrics['pr_auc']:.4f}")
+            win_rate_display = metrics['win_rate']
+        
         print("=" * 60)
         print(f"\nWin rate is the precision: when model predicts 'BUY',")
-        print(f"it will be correct {metrics['win_rate']:.2%} of the time on test data.")
+        print(f"it will be correct {win_rate_display:.2%} of the time on test data.")
         print(f"\nLog file saved to: {log_filepath}")
         print("=" * 60)
         
@@ -376,12 +488,22 @@ if __name__ == "__main__":
         logger.info("\nFinal Metrics:")
         logger.info(f"  Window Size:       {params.window_size} candles")
         logger.info(f"  Threshold:         {metrics['threshold']:.4f}")
-        logger.info(f"  WIN RATE:          {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
-        logger.info(f"  Precision:         {metrics['precision']:.4f}")
-        logger.info(f"  Recall:            {metrics['recall']:.4f}")
-        logger.info(f"  F1 Score:          {metrics['f1']:.4f}")
-        logger.info(f"  ROC-AUC:           {metrics['roc_auc']:.4f}")
-        logger.info(f"  PR-AUC:            {metrics['pr_auc']:.4f}")
+        
+        if params.use_timeseries_cv:
+            logger.info(f"  WIN RATE:          {metrics['precision_mean']:.4f} ± {metrics['precision_std']:.4f} ({metrics['precision_mean']:.2%})")
+            logger.info(f"  Precision:         {metrics['precision_mean']:.4f} ± {metrics['precision_std']:.4f}")
+            logger.info(f"  Recall:            {metrics['recall_mean']:.4f} ± {metrics['recall_std']:.4f}")
+            logger.info(f"  F1 Score:          {metrics['f1_mean']:.4f} ± {metrics['f1_std']:.4f}")
+            logger.info(f"  ROC-AUC:           {metrics['roc_auc_mean']:.4f} ± {metrics['roc_auc_std']:.4f}")
+            logger.info(f"  PR-AUC:            {metrics['pr_auc_mean']:.4f} ± {metrics['pr_auc_std']:.4f}")
+        else:
+            logger.info(f"  WIN RATE:          {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
+            logger.info(f"  Precision:         {metrics['precision']:.4f}")
+            logger.info(f"  Recall:            {metrics['recall']:.4f}")
+            logger.info(f"  F1 Score:          {metrics['f1']:.4f}")
+            logger.info(f"  ROC-AUC:           {metrics['roc_auc']:.4f}")
+            logger.info(f"  PR-AUC:            {metrics['pr_auc']:.4f}")
+        
         logger.info(f"\nArtifacts saved to: {config.outputs_models_dir}")
         logger.info("=" * 80)
         

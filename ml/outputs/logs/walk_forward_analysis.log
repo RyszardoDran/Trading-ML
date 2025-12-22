@@ -2418,3 +2418,17 @@ Aggregated Results (17 folds):
 2025-12-21 10:58:01,733 - __main__ - WARNING -      This suggests model may be overfitting or trading lookahead patterns.
 2025-12-21 10:58:01,734 - __main__ - WARNING -      Baseline 85.71% may NOT be reliable for live trading.
 2025-12-21 10:58:01,734 - __main__ - INFO - ================================================================================
+2025-12-22 12:56:52,980 - __main__ - INFO - 
+================================================================================
+2025-12-22 12:56:52,986 - __main__ - INFO - WALK-FORWARD VALIDATION ANALYSIS
+2025-12-22 12:56:52,987 - __main__ - INFO - ================================================================================
+2025-12-22 12:56:52,987 - __main__ - INFO - Years: all available
+2025-12-22 12:56:52,987 - __main__ - INFO - Train window: 500 samples (~2500 minutes)
+2025-12-22 12:56:52,988 - __main__ - INFO - Test window: 100 samples (~500 minutes)
+2025-12-22 12:56:52,988 - __main__ - INFO - Step size: 50 samples (~250 minutes)
+2025-12-22 12:56:52,988 - __main__ - INFO - ================================================================================
+
+2025-12-22 12:56:52,988 - __main__ - INFO - Loading data...
+2025-12-22 12:57:05,068 - __main__ - INFO - Loaded 6,529,676 M1 candles
+2025-12-22 12:57:05,068 - __main__ - INFO - Aggregating to M5...
+2025-12-22 12:57:05,069 - ml.src.features.engineer_m5 - INFO - Aggregating 6529676 M1 candles to M5...

@@ -187,6 +187,13 @@ CRITICAL (DO NOT CHANGE):
         help="Minimum precision (win rate) floor for threshold selection (default: 0.70 - EARS)",
     )
     parser.add_argument(
+        "--min-recall",
+        type=float,
+        default=0.15,
+        metavar="R",
+        help="Minimum recall floor for threshold selection (default: 0.15)",
+    )
+    parser.add_argument(
         "--min-trades",
         type=int,
         default=None,
@@ -199,6 +206,68 @@ CRITICAL (DO NOT CHANGE):
         default=5,
         metavar="N",
         help="Cap number of predicted trades per day (default: 5 - risk management)",
+    )
+    
+    # Threshold optimization strategy
+    parser.add_argument(
+        "--use-ev-optimization",
+        action="store_true",
+        help="Use Expected Value optimization instead of F1 (default: False)",
+    )
+    parser.add_argument(
+        "--use-hybrid-optimization",
+        action="store_true",
+        default=True,
+        help="Use hybrid EV + precision/recall constraints (default: True)",
+    )
+    parser.add_argument(
+        "--ev-win-coefficient",
+        type=float,
+        default=1.0,
+        metavar="W",
+        help="Profit multiplier for correct predictions in EV optimization (default: 1.0)",
+    )
+    parser.add_argument(
+        "--ev-loss-coefficient",
+        type=float,
+        default=-1.0,
+        metavar="L",
+        help="Loss multiplier for incorrect predictions in EV optimization (default: -1.0)",
+    )
+    
+    # Cost-sensitive learning
+    parser.add_argument(
+        "--use-cost-sensitive-learning",
+        action="store_true",
+        help="Use cost-sensitive learning with sample weights (default: False)",
+    )
+    parser.add_argument(
+        "--sample-weight-positive",
+        type=float,
+        default=3.0,
+        metavar="W",
+        help="Sample weight for positive class (default: 3.0)",
+    )
+    parser.add_argument(
+        "--sample-weight-negative",
+        type=float,
+        default=1.0,
+        metavar="W",
+        help="Sample weight for negative class (default: 1.0)",
+    )
+    
+    # Time Series Cross-Validation
+    parser.add_argument(
+        "--use-timeseries-cv",
+        action="store_true",
+        help="Use Time Series Cross-Validation instead of single split (default: False)",
+    )
+    parser.add_argument(
+        "--cv-folds",
+        type=int,
+        default=5,
+        metavar="N",
+        help="Number of CV folds (default: 5)",
     )
     
     # Filters - M5 alignment
@@ -250,6 +319,15 @@ CRITICAL (DO NOT CHANGE):
         default=42,
         metavar="SEED",
         help="Random seed for reproducibility (default: 42)",
+    )
+    
+    # Feature version
+    parser.add_argument(
+        "--feature-version",
+        type=str,
+        default="v1",
+        metavar="VERSION",
+        help="Feature engineering version (default: v1)",
     )
     
     # Verbosity
@@ -355,19 +433,36 @@ def main() -> int:
         logger.info("\n" + "=" * 80)
         logger.info("TRAINING COMPLETED SUCCESSFULLY")
         logger.info("=" * 80)
-        logger.info(f"Threshold: {metrics['threshold']:.4f}")
-        logger.info(f"Win Rate (Precision): {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
-        logger.info(f"Recall: {metrics['recall']:.4f}")
-        logger.info(f"F1 Score: {metrics['f1']:.4f}")
-        logger.info(f"ROC-AUC: {metrics['roc_auc']:.4f}")
-        logger.info(f"PR-AUC: {metrics['pr_auc']:.4f}")
-        logger.info("=" * 80)
         
-        print("\nTraining completed successfully!")
-        print(f"   Window Size: {args.window_size} candles")
-        print(f"   Win Rate: {metrics['win_rate']:.2%}")
-        print(f"   Threshold: {metrics['threshold']:.4f}")
-        print("\nArtifacts saved to: ml/outputs/models/")
+        if params.use_timeseries_cv:
+            # CV mode - show aggregated metrics
+            logger.info("CV Mode Results:")
+            logger.info(f"Precision: {metrics.get('precision_mean', 'N/A'):.3f}±{metrics.get('precision_std', 'N/A'):.3f}")
+            logger.info(f"Recall: {metrics.get('recall_mean', 'N/A'):.3f}±{metrics.get('recall_std', 'N/A'):.3f}")
+            logger.info(f"F1 Score: {metrics.get('f1_mean', 'N/A'):.3f}±{metrics.get('f1_std', 'N/A'):.3f}")
+            logger.info(f"ROC-AUC: {metrics.get('roc_auc_mean', 'N/A'):.3f}±{metrics.get('roc_auc_std', 'N/A'):.3f}")
+            logger.info(f"PR-AUC: {metrics.get('pr_auc_mean', 'N/A'):.3f}±{metrics.get('pr_auc_std', 'N/A'):.3f}")
+            
+            print("\nCV Training completed successfully!")
+            print(f"   CV Folds: {args.cv_folds}")
+            print(f"   Avg Precision: {metrics.get('precision_mean', 0):.1%}")
+            print(f"   Avg Recall: {metrics.get('recall_mean', 0):.1%}")
+        else:
+            # Single split mode - show individual metrics
+            logger.info(f"Threshold: {metrics['threshold']:.4f}")
+            logger.info(f"Win Rate (Precision): {metrics['win_rate']:.4f} ({metrics['win_rate']:.2%})")
+            logger.info(f"Recall: {metrics['recall']:.4f}")
+            logger.info(f"F1 Score: {metrics['f1']:.4f}")
+            logger.info(f"ROC-AUC: {metrics['roc_auc']:.4f}")
+            logger.info(f"PR-AUC: {metrics['pr_auc']:.4f}")
+            
+            print("\nTraining completed successfully!")
+            print(f"   Window Size: {args.window_size} candles")
+            print(f"   Win Rate: {metrics['win_rate']:.2%}")
+            print(f"   Threshold: {metrics['threshold']:.4f}")
+            print("\nArtifacts saved to: ml/outputs/models/")
+        
+        logger.info("=" * 80)
         print("Logs saved to: ml/outputs/logs/")
         
         return 0

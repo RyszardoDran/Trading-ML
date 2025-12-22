@@ -14,20 +14,15 @@ Example:
 """
 
 from .sequence_xgb_trainer import train_xgb
-from .sequence_evaluation import evaluate
+from .sequence_evaluation import evaluate, evaluate_with_fixed_threshold, optimize_threshold_on_val
 from .sequence_feature_analysis import analyze_feature_importance
 from .sequence_artifacts import save_artifacts
 
 __all__ = [
     "train_xgb",
     "evaluate",
-    "analyze_feature_importance",
-    "save_artifacts",
-]
-
-__all__ = [
-    "train_xgb",
-    "evaluate",
+    "evaluate_with_fixed_threshold",
+    "optimize_threshold_on_val",
     "analyze_feature_importance",
     "save_artifacts",
 ]

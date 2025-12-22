@@ -49,6 +49,10 @@ class PipelineParams:
     Attributes (Sequence constraints):
         max_windows: Maximum training windows to keep
         
+    Attributes (Time Series Cross-Validation):
+        use_timeseries_cv: Use Time Series CV instead of single split
+        cv_folds: Number of CV folds (default 5)
+        
     Attributes (Threshold optimization):
         min_precision: Minimum precision threshold (0-1)
         min_trades: Minimum predicted positives (None = dynamic)
@@ -89,6 +93,10 @@ class PipelineParams:
     
     # Sequence constraints
     max_windows: int
+    
+    # Time Series Cross-Validation
+    use_timeseries_cv: bool
+    cv_folds: int
     
     # Threshold optimization
     min_precision: float
@@ -140,6 +148,8 @@ class PipelineParams:
             custom_start_hour=args.custom_start_hour,
             custom_end_hour=args.custom_end_hour,
             max_windows=args.max_windows,
+            use_timeseries_cv=args.use_timeseries_cv,
+            cv_folds=args.cv_folds,
             min_precision=args.min_precision,
             min_recall=args.min_recall,
             min_trades=args.min_trades,
@@ -205,6 +215,9 @@ class PipelineParams:
         
         if self.max_windows < 100:
             raise ValueError(f"max_windows should be >= 100, got {self.max_windows}")
+        
+        if self.cv_folds < 2:
+            raise ValueError(f"cv_folds must be >= 2, got {self.cv_folds}")
         
         # Threshold validation
         if not (0 <= self.min_precision <= 1):

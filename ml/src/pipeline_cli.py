@@ -154,6 +154,20 @@ def parse_cli_arguments() -> argparse.Namespace:
         help="Maximum number of training windows to keep (prevent OOM, default: 200,000)",
     )
     
+    # ===== Time Series Cross-Validation =====
+    parser.add_argument(
+        "--use-timeseries-cv",
+        action="store_true",
+        default=False,
+        help="Use Time Series Cross-Validation instead of single split (default: False)",
+    )
+    parser.add_argument(
+        "--cv-folds",
+        type=int,
+        default=5,
+        help="Number of CV folds for Time Series CV (default: 5)",
+    )
+    
     # ===== Threshold optimization =====
     parser.add_argument(
         "--min-precision",

@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 def train_xgb(
     X_train: np.ndarray,
     y_train: np.ndarray,
-    X_val: np.ndarray,
-    y_val: np.ndarray,
+    X_val: np.ndarray | None = None,
+    y_val: np.ndarray | None = None,
     random_state: int = 42,
     sample_weight: np.ndarray | None = None,
     n_estimators: int = 600,
@@ -27,8 +27,8 @@ def train_xgb(
     Args:
         X_train: Training features (n_samples, n_features)
         y_train: Training labels (binary 0/1)
-        X_val: Validation features (n_samples, n_features)
-        y_val: Validation labels (binary 0/1)
+        X_val: Optional validation features for early stopping (n_samples, n_features)
+        y_val: Optional validation labels for early stopping (binary 0/1)
         random_state: Random seed for reproducibility
         sample_weight: Optional sample weights for cost-sensitive learning (n_samples,)
                       If provided, higher weights penalize misclassification more
@@ -72,17 +72,26 @@ def train_xgb(
         tree_method="hist",
         verbosity=0,
         grow_policy="depthwise",
-        early_stopping_rounds=None,  # Disable early stopping (no validation set in CV)
+        early_stopping_rounds=20 if X_val is not None else None,  # Enable early stopping if val set provided
     )
 
-    # Train WITHOUT eval_set (avoid timeout issues in CV)
+    # Train with or without eval_set
     logger.info("Training XGBoost classifier...")
-    base.fit(
-        X_train,
-        y_train,
-        sample_weight=sample_weight,  # Cost-sensitive learning weights
-        verbose=False,
-    )
+    if X_val is not None and y_val is not None:
+        base.fit(
+            X_train,
+            y_train,
+            eval_set=[(X_val, y_val)],
+            sample_weight=sample_weight,  # Cost-sensitive learning weights
+            verbose=False,
+        )
+    else:
+        base.fit(
+            X_train,
+            y_train,
+            sample_weight=sample_weight,  # Cost-sensitive learning weights
+            verbose=False,
+        )
     
     logger.info("Training completed")
 

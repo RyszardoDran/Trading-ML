@@ -25,7 +25,7 @@ Usage:
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union, List
 
 import numpy as np
 import pandas as pd
@@ -36,9 +36,200 @@ from .features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
 from .pipelines.sequence_split import split_sequences
 from .sequences import SequenceFilterConfig, create_sequences
 from .targets import make_target
-from .training import evaluate, save_artifacts, train_xgb
+from .training import evaluate, evaluate_with_fixed_threshold, optimize_threshold_on_val, save_artifacts, train_xgb
+from .utils.timeseries_validation import TimeSeriesValidator, validate_train_test_boundary
 
 logger = logging.getLogger(__name__)
+
+
+def validate_class_distribution(
+    y_train: np.ndarray,
+    y_val: np.ndarray,
+    y_test: np.ndarray,
+    tolerance_pct: float = 10.0,
+) -> None:
+    """Validate that class distribution is similar across train/val/test splits.
+    
+    **PURPOSE**: Ensure temporal stability of target distribution. Trading signals
+    should have similar win/loss ratios across different time periods. Large
+    differences indicate potential issues with market regime changes or data quality.
+    
+    Args:
+        y_train: Training targets (0/1)
+        y_val: Validation targets (0/1) 
+        y_test: Test targets (0/1)
+        tolerance_pct: Maximum allowed difference in positive class % (default 10%)
+        
+    Raises:
+        ValueError: If class distributions differ by more than tolerance_pct
+        
+    Notes:
+        - Logs detailed statistics for each split
+        - Warns if differences exceed tolerance but doesn't fail (for CV)
+        - Critical for ensuring model generalizes across time periods
+        
+    Examples:
+        >>> validate_class_distribution(y_train, y_val, y_test)
+        TRAIN: pos=1,234 (35.6%), neg=2,234 (64.4%)
+        VAL:   pos=456 (32.1%), neg=967 (67.9%)  
+        TEST:  pos=789 (38.2%), neg=1,278 (61.8%)
+        ✅ Class distributions are stable (max diff: 6.1% < 10.0%)
+    """
+    def get_stats(y, name):
+        pos = int(y.sum())
+        neg = int((y == 0).sum())
+        pos_pct = 100 * pos / len(y) if len(y) > 0 else 0
+        return pos, neg, pos_pct, f"{name}: pos={pos:,} ({pos_pct:.1f}%), neg={neg:,} ({100-pos_pct:.1f}%)"
+    
+    train_pos, train_neg, train_pct, train_msg = get_stats(y_train, "TRAIN")
+    val_pos, val_neg, val_pct, val_msg = get_stats(y_val, "VAL")
+    test_pos, test_neg, test_pct, test_msg = get_stats(y_test, "TEST")
+    
+    logger.info("Class distribution validation:")
+    logger.info(f"  {train_msg}")
+    logger.info(f"  {val_msg}")
+    logger.info(f"  {test_msg}")
+    
+    # Calculate differences
+    train_val_diff = abs(train_pct - val_pct)
+    train_test_diff = abs(train_pct - test_pct)
+    val_test_diff = abs(val_pct - test_pct)
+    max_diff = max(train_val_diff, train_test_diff, val_test_diff)
+    
+    logger.info(f"  Max difference in positive class: {max_diff:.1f}% (tolerance: {tolerance_pct:.1f}%)")
+    
+    if max_diff > tolerance_pct:
+        logger.warning(
+            f"⚠️  Class distributions differ significantly (max diff: {max_diff:.1f}% > {tolerance_pct:.1f}%)"
+        )
+        logger.warning("   This may indicate market regime changes or data quality issues")
+        logger.warning("   Model performance may be unstable across time periods")
+    else:
+        logger.info(f"  ✅ Class distributions are stable (max diff: {max_diff:.1f}% < {tolerance_pct:.1f}%)")
+
+
+def validate_sequence_boundaries(
+    timestamps: pd.DatetimeIndex,
+    train_end_idx: int,
+    val_end_idx: int,
+    window_size: int,
+) -> None:
+    """Validate that sequences don't cross train/val/test boundaries.
+    
+    **PURPOSE**: Prevent data leakage where sequences span across temporal splits.
+    A sequence ending near a boundary might include data from both sides, causing
+    the model to learn patterns that won't exist in production.
+    
+    Args:
+        timestamps: Datetime index for all sequences
+        train_end_idx: Last index of training set
+        val_end_idx: Last index of validation set  
+        window_size: Number of candles per sequence
+        
+    Notes:
+        - Logs warnings if sequences cross boundaries
+        - Critical for time series validation integrity
+        
+    Examples:
+        >>> validate_sequence_boundaries(timestamps, 1000, 1200, 100)
+        ⚠️  5 sequences cross train/val boundary
+        ⚠️  3 sequences cross val/test boundary
+    """
+    # Check sequences that might cross train/val boundary
+    train_boundary_crossings = 0
+    for i in range(max(0, train_end_idx - window_size + 1), min(train_end_idx + 1, len(timestamps))):
+        seq_start = timestamps[i] if i < len(timestamps) else None
+        seq_end = timestamps[min(i + window_size - 1, len(timestamps) - 1)] if i < len(timestamps) else None
+        if seq_start is not None and seq_end is not None:
+            # If sequence spans the boundary, count it
+            if i <= train_end_idx < i + window_size - 1:
+                train_boundary_crossings += 1
+    
+    # Check sequences that might cross val/test boundary  
+    val_boundary_crossings = 0
+    for i in range(max(0, val_end_idx - window_size + 1), min(val_end_idx + 1, len(timestamps))):
+        seq_start = timestamps[i] if i < len(timestamps) else None
+        seq_end = timestamps[min(i + window_size - 1, len(timestamps) - 1)] if i < len(timestamps) else None
+        if seq_start is not None and seq_end is not None:
+            # If sequence spans the boundary, count it
+            if i <= val_end_idx < i + window_size - 1:
+                val_boundary_crossings += 1
+    
+    if train_boundary_crossings > 0:
+        logger.warning(f"⚠️  {train_boundary_crossings} sequences cross train/val boundary (potential data leakage)")
+    if val_boundary_crossings > 0:
+        logger.warning(f"⚠️  {val_boundary_crossings} sequences cross val/test boundary (potential data leakage)")
+    
+    if train_boundary_crossings == 0 and val_boundary_crossings == 0:
+        logger.info("✅ No sequences cross temporal boundaries")
+    else:
+        logger.warning("   Consider removing boundary-crossing sequences to prevent data leakage")
+
+
+def load_and_prepare_data(
+    y_train: np.ndarray,
+    y_val: np.ndarray,
+    y_test: np.ndarray,
+    tolerance_pct: float = 10.0,
+) -> None:
+    """Validate that class distribution is similar across train/val/test splits.
+    
+    **PURPOSE**: Ensure temporal stability of target distribution. Trading signals
+    should have similar win/loss ratios across different time periods. Large
+    differences indicate potential issues with market regime changes or data quality.
+    
+    Args:
+        y_train: Training targets (0/1)
+        y_val: Validation targets (0/1) 
+        y_test: Test targets (0/1)
+        tolerance_pct: Maximum allowed difference in positive class % (default 10%)
+        
+    Raises:
+        ValueError: If class distributions differ by more than tolerance_pct
+        
+    Notes:
+        - Logs detailed statistics for each split
+        - Warns if differences exceed tolerance but doesn't fail (for CV)
+        - Critical for ensuring model generalizes across time periods
+        
+    Examples:
+        >>> validate_class_distribution(y_train, y_val, y_test)
+        TRAIN: pos=1,234 (35.6%), neg=2,234 (64.4%)
+        VAL:   pos=456 (32.1%), neg=967 (67.9%)  
+        TEST:  pos=789 (38.2%), neg=1,278 (61.8%)
+        ✅ Class distributions are stable (max diff: 6.1% < 10.0%)
+    """
+    def get_stats(y, name):
+        pos = int(y.sum())
+        neg = int((y == 0).sum())
+        pos_pct = 100 * pos / len(y) if len(y) > 0 else 0
+        return pos, neg, pos_pct, f"{name}: pos={pos:,} ({pos_pct:.1f}%), neg={neg:,} ({100-pos_pct:.1f}%)"
+    
+    train_pos, train_neg, train_pct, train_msg = get_stats(y_train, "TRAIN")
+    val_pos, val_neg, val_pct, val_msg = get_stats(y_val, "VAL")
+    test_pos, test_neg, test_pct, test_msg = get_stats(y_test, "TEST")
+    
+    logger.info("Class distribution validation:")
+    logger.info(f"  {train_msg}")
+    logger.info(f"  {val_msg}")
+    logger.info(f"  {test_msg}")
+    
+    # Calculate differences
+    train_val_diff = abs(train_pct - val_pct)
+    train_test_diff = abs(train_pct - test_pct)
+    val_test_diff = abs(val_pct - test_pct)
+    max_diff = max(train_val_diff, train_test_diff, val_test_diff)
+    
+    logger.info(f"  Max difference in positive class: {max_diff:.1f}% (tolerance: {tolerance_pct:.1f}%)")
+    
+    if max_diff > tolerance_pct:
+        logger.warning(
+            f"⚠️  Class distributions differ significantly (max diff: {max_diff:.1f}% > {tolerance_pct:.1f}%)"
+        )
+        logger.warning("   This may indicate market regime changes or data quality issues")
+        logger.warning("   Model performance may be unstable across time periods")
+    else:
+        logger.info(f"  ✅ Class distributions are stable (max diff: {max_diff:.1f}% < {tolerance_pct:.1f}%)")
 
 
 def load_and_prepare_data(
@@ -334,96 +525,173 @@ def split_and_scale_stage(
     y: np.ndarray,
     timestamps: pd.DatetimeIndex,
     year_filter: Optional[list[int]] = None,
-) -> Tuple[
-    np.ndarray, np.ndarray, np.ndarray,
-    np.ndarray, np.ndarray, np.ndarray,
-    pd.DatetimeIndex, pd.DatetimeIndex, pd.DatetimeIndex,
-    RobustScaler
+    use_timeseries_cv: bool = False,
+    cv_folds: int = 5,
+) -> Union[
+    Tuple[
+        np.ndarray, np.ndarray, np.ndarray,
+        np.ndarray, np.ndarray, np.ndarray,
+        pd.DatetimeIndex, pd.DatetimeIndex, pd.DatetimeIndex,
+        RobustScaler
+    ],
+    List[Dict]
 ]:
     """Split data chronologically and scale features without leakage.
     
     **PURPOSE**: Split sequences into train/val/test sets chronologically
-    (no lookahead bias). Fit RobustScaler ONLY on training data, then
-    apply to all sets.
+    (no lookahead bias). Supports both single split and Time Series CV.
+    Fit RobustScaler ONLY on training data, then apply to all sets.
     
     Args:
         X: Sequence features (n_sequences, n_features)
         y: Sequence targets (n_sequences,)
         timestamps: Datetime for each sequence (n_sequences,)
         year_filter: Optional list of years (affects split strategy)
+        use_timeseries_cv: If True, use CV instead of single split
+        cv_folds: Number of CV folds (only used if use_timeseries_cv=True)
         
     Returns:
-        Tuple of:
-        - X_train_scaled: Training features (float32)
-        - X_val_scaled: Validation features (float32)
-        - X_test_scaled: Test features (float32)
-        - y_train: Training targets
-        - y_val: Validation targets
-        - y_test: Test targets
-        - ts_train: Training timestamps
-        - ts_val: Validation timestamps
-        - ts_test: Test timestamps
-        - scaler: RobustScaler fitted on training data
+        If use_timeseries_cv=False:
+            Single split: (X_train_scaled, X_val_scaled, X_test_scaled,
+                          y_train, y_val, y_test,
+                          ts_train, ts_val, ts_test, scaler)
+        If use_timeseries_cv=True:
+            List of folds: [{'fold': int, 'train_idx': array, 'test_idx': array,
+                           'X_train_scaled': array, 'X_test_scaled': array,
+                           'y_train': array, 'y_test': array,
+                           'timestamps_train': DatetimeIndex, 'timestamps_test': DatetimeIndex,
+                           'scaler': RobustScaler}, ...]
         
     Notes:
         - CRITICAL: Prevents data leakage by fitting scaler only on train
         - Uses percentage split (70/15/15) for year_filter
         - Uses fixed date split for full dataset
         - Features converted to float32 to save memory
+        - CV provides robust metrics across multiple temporal splits
+        - **VALIDATES CLASS DISTRIBUTION** to ensure temporal stability
         
     Examples:
+        >>> # Single split
         >>> X_tr, X_v, X_te, y_tr, y_v, y_te, ..., scaler = split_and_scale_stage(...)
         >>> X_tr.shape
         (70000, 3420)  # 70% of sequences, 57*60 features
         >>> X_tr.dtype
         dtype('float32')
+        
+        >>> # Time Series CV
+        >>> cv_results = split_and_scale_stage(..., use_timeseries_cv=True, cv_folds=5)
+        >>> len(cv_results)  # 5 folds
+        5
     """
-    logger.info("Splitting data chronologically (train/val/test)...")
+    if use_timeseries_cv:
+        logger.info(f"Using Time Series Cross-Validation with {cv_folds} folds")
+        
+        validator = TimeSeriesValidator(n_splits=cv_folds, gap=0)
+        cv_results = []
+        
+        for fold, train_idx, test_val_idx in validator.split(X, y):
+            # Validate boundaries
+            validate_train_test_boundary(timestamps, train_idx, test_val_idx)
+            
+            # Split test_val_idx into validation and test for threshold optimization
+            n_test_val = len(test_val_idx)
+            val_end = n_test_val // 2
+            val_idx = test_val_idx[:val_end]
+            test_idx = test_val_idx[val_end:]
+            
+            # Split data
+            X_train = X[train_idx]
+            y_train = y[train_idx]
+            X_val = X[val_idx]
+            y_val = y[val_idx]
+            X_test = X[test_idx]
+            y_test = y[test_idx]
+            
+            # Validate class distribution for this fold
+            logger.info(f"Fold {fold}: Class distribution check")
+            validate_class_distribution(y_train, y_val, y_test)
+            
+            # Scale only on training data
+            scaler = RobustScaler()
+            X_train_scaled = scaler.fit_transform(X_train).astype(np.float32)
+            X_val_scaled = scaler.transform(X_val).astype(np.float32)
+            X_test_scaled = scaler.transform(X_test).astype(np.float32)
+            
+            cv_results.append({
+                'fold': fold,
+                'train_idx': train_idx,
+                'val_idx': val_idx,
+                'test_idx': test_idx,
+                'X_train_scaled': X_train_scaled,
+                'X_val_scaled': X_val_scaled,
+                'X_test_scaled': X_test_scaled,
+                'y_train': y_train,
+                'y_val': y_val,
+                'y_test': y_test,
+                'timestamps_train': timestamps[train_idx],
+                'timestamps_val': timestamps[val_idx],
+                'timestamps_test': timestamps[test_idx],
+                'scaler': scaler,
+            })
+        
+        return cv_results  # List of folds
     
-    if year_filter is not None:
-        # Use percentage split for filtered data
-        n = len(X)
-        train_idx = int(0.7 * n)
-        val_idx = int(0.85 * n)
-        X_train, y_train = X[:train_idx], y[:train_idx]
-        X_val, y_val = X[train_idx:val_idx], y[train_idx:val_idx]
-        X_test, y_test = X[val_idx:], y[val_idx:]
-        ts_train = timestamps[:train_idx]
-        ts_val = timestamps[train_idx:val_idx]
-        ts_test = timestamps[val_idx:]
-        logger.info(f"Using percentage split (70/15/15) for year_filter={year_filter}")
     else:
-        # Use fixed date split for full dataset
-        (X_train, X_val, X_test, y_train, y_val, y_test, ts_train, ts_val, ts_test) = \
-            split_sequences(X, y, timestamps)
-        logger.info("Using fixed date split for full dataset")
-    
-    logger.info(f"Split sizes: train={len(X_train):,}, val={len(X_val):,}, test={len(X_test):,}")
-    
-    # CRITICAL: Fit scaler ONLY on training data
-    logger.info("Scaling features with RobustScaler (robust to outliers)...")
-    scaler = RobustScaler()
-    X_train_scaled = scaler.fit_transform(X_train).astype(np.float32)
-    X_val_scaled = scaler.transform(X_val).astype(np.float32)
-    X_test_scaled = scaler.transform(X_test).astype(np.float32)
-    
-    logger.info(
-        f"Feature scaling complete: mean={X_train_scaled.mean():.4f}, "
-        f"std={X_train_scaled.std():.4f}"
-    )
-    
-    return X_train_scaled, X_val_scaled, X_test_scaled, \
-           y_train, y_val, y_test, \
-           ts_train, ts_val, ts_test, \
-           scaler
+        logger.info("Using chronological 3-way split (train/val/test)...")
+        
+        if year_filter is not None:
+            # Use percentage split for filtered data
+            n = len(X)
+            train_idx = int(0.7 * n)
+            val_idx = int(0.85 * n)
+            X_train, y_train = X[:train_idx], y[:train_idx]
+            X_val, y_val = X[train_idx:val_idx], y[train_idx:val_idx]
+            X_test, y_test = X[val_idx:], y[val_idx:]
+            ts_train = timestamps[:train_idx]
+            ts_val = timestamps[train_idx:val_idx]
+            ts_test = timestamps[val_idx:]
+            logger.info(f"Using percentage split (70/15/15) for year_filter={year_filter}")
+        else:
+            # Use fixed date split for full dataset
+            (X_train, X_val, X_test, y_train, y_val, y_test, ts_train, ts_val, ts_test) = \
+                split_sequences(X, y, timestamps)
+            logger.info("Using fixed date split for full dataset")
+        
+        logger.info(f"Split sizes: train={len(X_train):,}, val={len(X_val):,}, test={len(X_test):,}")
+        
+        # Validate class distribution stability across time periods
+        validate_class_distribution(y_train, y_val, y_test)
+        
+        # Validate sequence boundaries to prevent data leakage
+        train_end_idx = len(X_train) - 1
+        val_end_idx = len(X_train) + len(X_val) - 1
+        window_size = X.shape[1] // 24  # Approximate window size from feature dimensions
+        validate_sequence_boundaries(timestamps, train_end_idx, val_end_idx, window_size)
+        
+        # CRITICAL: Fit scaler ONLY on training data
+        logger.info("Scaling features with RobustScaler (robust to outliers)...")
+        scaler = RobustScaler()
+        X_train_scaled = scaler.fit_transform(X_train).astype(np.float32)
+        X_val_scaled = scaler.transform(X_val).astype(np.float32)
+        X_test_scaled = scaler.transform(X_test).astype(np.float32)
+        
+        logger.info(
+            f"Feature scaling complete: mean={X_train_scaled.mean():.4f}, "
+            f"std={X_train_scaled.std():.4f}"
+        )
+        
+        return X_train_scaled, X_val_scaled, X_test_scaled, \
+               y_train, y_val, y_test, \
+               ts_train, ts_val, ts_test, \
+               scaler
 
 
 def train_and_evaluate_stage(
     X_train_scaled: np.ndarray,
     y_train: np.ndarray,
-    X_val_scaled: np.ndarray,
+    X_val_scaled: np.ndarray,  # ← REQUIRED dla threshold optimization
     y_val: np.ndarray,
-    X_test_scaled: np.ndarray,
+    X_test_scaled: np.ndarray,  # ← SEPARATE from val
     y_test: np.ndarray,
     ts_test: pd.DatetimeIndex,
     random_state: int,
@@ -439,46 +707,52 @@ def train_and_evaluate_stage(
     sample_weight_positive: float = 3.0,
     sample_weight_negative: float = 1.0,
 ) -> tuple[dict[str, float], object]:
-    """Train XGBoost model with calibration and evaluate on test set.
-    
-    **PURPOSE**: Train calibrated XGBoost classifier, select optimal
-    decision threshold based on precision constraint or Expected Value,
-    and evaluate on held-out test set.
-    
+    """Train model with proper validation/test separation.
+
+    **CRITICAL**: This function enforces proper data split usage:
+    - TRAIN: fit model
+    - VAL: optimize threshold
+    - TEST: evaluate final metrics (no threshold tuning!)
+
     Args:
         X_train_scaled: Scaled training features
         y_train: Training targets
-        X_val_scaled: Scaled validation features
-        y_val: Validation targets
+        X_val_scaled: Scaled validation features (REQUIRED)
+        y_val: Validation targets (REQUIRED)
         X_test_scaled: Scaled test features
         y_test: Test targets
         ts_test: Test timestamps (for daily trade capping)
         random_state: Random seed
         min_precision: Minimum precision threshold (0-1)
+        min_recall: Minimum recall threshold (0-1)
         min_trades: Minimum predicted positives (None = dynamic)
         max_trades_per_day: Cap trades per day (None = unlimited)
         use_ev_optimization: If True, optimize for Expected Value instead of F1
+        use_hybrid_optimization: If True, use hybrid EV + constraints
         ev_win_coefficient: Profit multiplier for correct predictions
         ev_loss_coefficient: Loss multiplier for incorrect predictions
-        
+
     Returns:
         Tuple of:
         - Dictionary with metrics (threshold, win_rate, precision, recall, f1, roc_auc, pr_auc)
         - Trained and calibrated model object
-        
+
     Notes:
         - Model trained with early stopping on validation set
         - Probability calibration applied for reliable confidence scores
-        - Threshold optimized on validation or test set based on strategy
-        
+        - Threshold optimized on VAL set, final metrics on TEST set
+
     Examples:
-        >>> metrics, model = train_and_evaluate_stage(X_tr, y_tr, X_v, y_v, ...)
+        >>> metrics, model = train_and_evaluate_stage(X_tr, y_tr, X_v, y_v, X_te, y_te, ...)
         >>> metrics['win_rate']
         0.87
         >>> metrics['threshold']
         0.45
     """
-    # ===== POINT 1: Cost-Sensitive Learning =====
+    # ===== STAGE 1: Train model on TRAIN set =====
+    logger.info("Training XGBoost model...")
+
+    # Cost-Sensitive Learning
     sample_weight = None
     if use_cost_sensitive_learning:
         logger.info(f"\n[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...")
@@ -489,34 +763,65 @@ def train_and_evaluate_stage(
             sample_weight_negative
         ).astype(np.float32)
         logger.info(f"  Weight ratio (positive/negative): {sample_weight_positive / sample_weight_negative:.2f}x")
-    
-    logger.info("Training XGBoost classifier...")
-    model = train_xgb(X_train_scaled, y_train, X_val_scaled, y_val, random_state=random_state, sample_weight=sample_weight)
-    
-    logger.info("Evaluating model on test set...")
-    metrics = evaluate(
-        model,
-        X_test_scaled,
-        y_test,
-        min_precision=min_precision,
-        min_recall=min_recall,
-        min_trades=min_trades,
+
+    model = train_xgb(
+        X_train_scaled, y_train,
+        X_val_scaled, y_val,  # Use val for early stopping
+        random_state=random_state,
+        sample_weight=sample_weight
+    )
+
+    logger.info("Model training complete")
+
+    # ===== STAGE 2: Optimize threshold on VAL set =====
+    if X_val_scaled is not None and y_val is not None:
+        logger.info("Optimizing decision threshold on VAL set...")
+
+        y_pred_proba_val = model.predict_proba(X_val_scaled)[:, 1]
+
+        best_threshold, best_score = optimize_threshold_on_val(
+            y_true=y_val,
+            y_pred_proba=y_pred_proba_val,
+            min_precision=min_precision,
+            min_recall=min_recall,
+            use_ev_optimization=use_ev_optimization,
+            use_hybrid_optimization=use_hybrid_optimization,
+            ev_win_coefficient=ev_win_coefficient,
+            ev_loss_coefficient=ev_loss_coefficient,
+            min_trades=min_trades,
+            timestamps=None,  # For now, no timestamps on val
+            max_trades_per_day=max_trades_per_day,
+        )
+
+        logger.info(f"Optimal threshold: {best_threshold:.4f} (Score={best_score:.4f} on VAL)")
+    else:
+        # No validation set available (e.g., CV mode) - use default threshold
+        logger.info("No validation set available - using default threshold 0.5")
+        best_threshold = 0.5
+        best_score = None
+    # ===== STAGE 3: Evaluate on TEST set with optimized threshold =====
+    # ⚠️  CRITICAL: Nie używamy X_test do szukania threshold!
+    # Tylko do raportowania final metrics!
+
+    logger.info("Evaluating on TEST set with optimized threshold...")
+
+    metrics = evaluate_with_fixed_threshold(
+        model=model,
+        X_test=X_test_scaled,
+        y_test=y_test,
+        threshold=best_threshold,
         test_timestamps=ts_test,
         max_trades_per_day=max_trades_per_day,
-        use_ev_optimization=use_ev_optimization,
-        use_hybrid_optimization=use_hybrid_optimization,
-        ev_win_coefficient=ev_win_coefficient,
-        ev_loss_coefficient=ev_loss_coefficient,
     )
-    
+
     logger.info(
-        f"Evaluation metrics: threshold={metrics['threshold']:.4f}, "
+        f"Final TEST metrics: threshold={metrics['threshold']:.4f}, "
         f"win_rate={metrics['win_rate']:.4f} ({metrics['win_rate']:.2%}), "
         f"precision={metrics['precision']:.4f}, recall={metrics['recall']:.4f}, "
         f"f1={metrics['f1']:.4f}, roc_auc={metrics['roc_auc']:.4f}, "
         f"pr_auc={metrics['pr_auc']:.4f}"
     )
-    
+
     return metrics, model
 
 

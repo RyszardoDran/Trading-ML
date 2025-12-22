@@ -57,38 +57,28 @@ from ..utils.risk_config import (
 logger = logging.getLogger(__name__)
 
 
-def aggregate_to_m5(df_m1: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate M1 OHLCV data to M5 (5-minute) bars.
-    
-    **PURPOSE**: Convert high-frequency M1 data into M5 timeframe
-    for strategy that operates on 5-minute candles.
-    
-    **AGGREGATION RULES**:
-    - Open: First value in 5-minute period
-    - High: Maximum value in 5-minute period
-    - Low: Minimum value in 5-minute period
-    - Close: Last value in 5-minute period
-    - Volume: Sum of volume in 5-minute period
+def aggregate_to_m5(
+    df_m1: pd.DataFrame,
+    start_date: str = None,
+    end_date: str = None
+) -> pd.DataFrame:
+    """Aggregate M1 OHLCV data to M5 (5-minute) bars, with optional date filtering to prevent data leakage.
     
     Args:
         df_m1: M1 DataFrame with DatetimeIndex and [Open, High, Low, Close, Volume]
-        
+        start_date: Optional, filter data from this date (inclusive)
+        end_date: Optional, filter data up to this date (inclusive)
     Returns:
         M5 DataFrame with aggregated OHLCV data
-        
     Raises:
         ValueError: If required columns are missing
-        
-    Notes:
-        - Drops any incomplete 5-minute bars at the end
-        - Result is ~1/5 the size of input (10,080 M1 → 2,016 M5)
-        
-    Examples:
-        >>> df_m1 = load_data(days=7)  # 10,080 M1 candles
-        >>> df_m5 = aggregate_to_m5(df_m1)
-        >>> len(df_m5)
-        2016  # ~10,080 / 5
     """
+    # Filter by date if specified
+    if start_date is not None:
+        df_m1 = df_m1[df_m1.index >= pd.to_datetime(start_date)]
+    if end_date is not None:
+        df_m1 = df_m1[df_m1.index <= pd.to_datetime(end_date)]
+
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     missing_cols = set(required_cols) - set(df_m1.columns)
     if missing_cols:
@@ -220,9 +210,7 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     else:
         cvd_norm = pd.Series(0.0, index=df_m5.index)
     
-    # SMA 200 (200-period on M5 = 1000 minutes = 16.7 hours)
-    sma_200 = close.rolling(200, min_periods=1).mean()
-    dist_sma_200 = (close - sma_200) / (atr_14 + 1e-9)
+    # SMA 200 moved to M15 context for longer trend perspective
     
     # Returns on M5
     ret_1 = close.pct_change().fillna(0)
@@ -293,11 +281,16 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     else:
         mfi_m15_norm = pd.Series(0.0, index=df_m15.index)
     
+    # SMA 200 on M15 (200-period on M15 = 3000 minutes = 50 hours) - longer trend context
+    sma_200_m15 = close_m15.rolling(200, min_periods=1).mean()
+    dist_sma_200_m15 = (close_m15 - sma_200_m15) / (atr_m15 + 1e-9)
+    
     # Align M15 to M5 index (backward-fill to avoid lookahead)
     # Use bfill instead of ffill: at time T, use PREVIOUS M15 bar that closed BEFORE T
     rsi_m15 = rsi_m15.reindex(df_m5.index, method='bfill').fillna(50)
     bb_pos_m15 = bb_pos_m15.reindex(df_m5.index, method='bfill').fillna(0.5)
     dist_sma_20_m15 = dist_sma_20_m15.reindex(df_m5.index, method='bfill').fillna(0)
+    dist_sma_200 = dist_sma_200_m15.reindex(df_m5.index, method='bfill').fillna(0)
     volume_m15_norm = volume_m15_norm.reindex(df_m5.index, method='bfill').fillna(1.0)
     cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='bfill').fillna(0)
     

@@ -634,3 +634,196 @@ def evaluate(
     }
     
     return metrics
+
+
+def optimize_threshold_on_val(
+    y_true: np.ndarray,
+    y_pred_proba: np.ndarray,
+    min_precision: float = 0.65,
+    min_recall: float = 0.40,
+    use_ev_optimization: bool = False,
+    use_hybrid_optimization: bool = False,
+    ev_win_coefficient: float = 2.0,
+    ev_loss_coefficient: float = 1.0,
+    min_trades: int | None = None,
+    timestamps: pd.DatetimeIndex | None = None,
+    max_trades_per_day: int | None = None,
+) -> tuple[float, float]:
+    """Find optimal threshold using VAL set.
+
+    **CRITICAL**: This runs ONLY on VAL set, not TEST.
+
+    Args:
+        y_true: Ground truth labels from VAL set
+        y_pred_proba: Predicted probabilities from VAL set
+        min_precision: Minimum acceptable precision
+        min_recall: Minimum acceptable recall
+        use_ev_optimization: Use Expected Value optimization
+        use_hybrid_optimization: Use hybrid (EV + precision/recall floors)
+        ev_win_coefficient: Win payoff for EV optimization
+        ev_loss_coefficient: Loss payoff for EV optimization
+        min_trades: Minimum trades constraint
+        timestamps: Timestamps for daily cap
+        max_trades_per_day: Daily trade limit
+
+    Returns:
+        (best_threshold, best_score)
+    """
+    logger.info("Running threshold optimization on VAL set...")
+
+    thresholds = _candidate_thresholds(y_pred_proba)
+    best_threshold = 0.5
+    best_score = -np.inf
+
+    results = []
+
+    for threshold in thresholds:
+        y_pred = (y_pred_proba >= threshold).astype(int)
+
+        # Apply daily cap if specified
+        if max_trades_per_day is not None and timestamps is not None:
+            y_pred = _apply_daily_cap(y_pred_proba, y_pred, timestamps, max_trades_per_day)
+
+        precision = precision_score(y_true, y_pred, zero_division=0)
+        recall = recall_score(y_true, y_pred, zero_division=0)
+        f1 = f1_score(y_true, y_pred, zero_division=0)
+
+        if use_hybrid_optimization:
+            # EV-based but with floor constraints
+            if precision >= min_precision and recall >= min_recall:
+                ev = (precision * ev_win_coefficient -
+                      (1 - precision) * ev_loss_coefficient)
+                score = ev
+            else:
+                score = -np.inf  # Invalid: doesn't meet constraints
+
+        elif use_ev_optimization:
+            # Pure EV optimization
+            ev = (precision * ev_win_coefficient -
+                  (1 - precision) * ev_loss_coefficient)
+            score = ev
+
+        else:
+            # F1-based optimization
+            score = f1
+
+        results.append({
+            'threshold': threshold,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'score': score,
+            'n_positives': np.sum(y_pred),
+        })
+
+        if score > best_score:
+            best_score = score
+            best_threshold = threshold
+
+    # Log top 5 thresholds
+    results_df = pd.DataFrame(results)
+    results_df = results_df.sort_values('score', ascending=False)
+
+    logger.info(f"\nTop 5 thresholds on VAL set:")
+    for i, row in results_df.head(5).iterrows():
+        logger.info(
+            f"  T={row['threshold']:.2f}: "
+            f"Precision={row['precision']:.4f}, "
+            f"Recall={row['recall']:.4f}, "
+            f"F1={row['f1']:.4f}, "
+            f"Score={row['score']:.4f}"
+        )
+
+    return best_threshold, best_score
+
+
+def evaluate_with_fixed_threshold(
+    model: XGBClassifier,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    threshold: float,
+    test_timestamps: pd.DatetimeIndex | None = None,
+    max_trades_per_day: int | None = None,
+) -> Dict[str, float]:
+    """Evaluate model using a fixed threshold (no optimization).
+
+    **CRITICAL**: This function does NOT optimize threshold - it uses the provided one.
+
+    Args:
+        model: Trained calibrated classifier
+        X_test: Test features (n_samples, n_features)
+        y_test: Test labels (binary 0/1)
+        threshold: Fixed classification threshold
+        test_timestamps: DatetimeIndex of test set timestamps, for daily cap
+        max_trades_per_day: Maximum trades per day, or None to disable
+
+    Returns:
+        Dictionary with metrics:
+        - threshold: The fixed threshold used
+        - win_rate: Precision at fixed threshold (expected win rate)
+        - precision: Same as win_rate
+        - recall: Recall at fixed threshold
+        - f1: F1 score at fixed threshold
+        - roc_auc: ROC-AUC (threshold-independent)
+        - pr_auc: PR-AUC (threshold-independent)
+        - n_positive_predictions: Number of predicted positives
+
+    Raises:
+        ValueError: If X_test is empty or mismatched with y_test
+    """
+    if len(X_test) == 0:
+        raise ValueError("X_test is empty; cannot evaluate")
+    if len(y_test) != len(X_test):
+        raise ValueError(f"Length mismatch: X_test({len(X_test)}) vs y_test({len(y_test)})")
+
+    proba = model.predict_proba(X_test)[:, 1]
+    if not np.isfinite(proba).all():
+        raise ValueError("Non-finite probabilities produced; check feature values and calibration")
+
+    # Log probability stats
+    logger.info(
+        "Probability stats: "
+        f"min={proba.min():.4f}, max={proba.max():.4f}, mean={proba.mean():.4f}, std={proba.std():.4f}"
+    )
+    logger.info(f"Using fixed threshold: {threshold:.4f}")
+
+    # Compute threshold-independent metrics
+    roc_auc = roc_auc_score(y_test, proba)
+    pr_auc = average_precision_score(y_test, proba)
+
+    # Apply fixed threshold
+    preds = (proba >= threshold).astype(int)
+
+    # Apply daily cap if specified
+    if max_trades_per_day is not None and test_timestamps is not None:
+        preds = _apply_daily_cap(proba, preds, test_timestamps, max_trades_per_day)
+
+    # Compute confusion matrix and metrics
+    cm = confusion_matrix(y_test, preds, labels=[0, 1])
+    logger.info(f"Confusion matrix@thr={threshold:.4f}:")
+    logger.info(f"  [[TN={cm[0,0]}, FP={cm[0,1]}],")
+    logger.info(f"   [FN={cm[1,0]}, TP={cm[1,1]}]]")
+
+    precision = precision_score(y_test, preds, zero_division=0)
+    recall = recall_score(y_test, preds, zero_division=0)
+    f1 = f1_score(y_test, preds, zero_division=0)
+
+    metrics = {
+        "threshold": float(threshold),
+        "win_rate": float(precision),  # Win rate = Precision
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1": float(f1),
+        "roc_auc": float(roc_auc),
+        "pr_auc": float(pr_auc),
+        "n_positive_predictions": int(np.sum(preds)),
+        "confusion_matrix": cm.tolist(),
+    }
+
+    logger.info(f"\nTEST SET EVALUATION:")
+    logger.info(f"  Precision: {metrics['precision']:.4f}")
+    logger.info(f"  Recall:    {metrics['recall']:.4f}")
+    logger.info(f"  F1:        {metrics['f1']:.4f}")
+    logger.info(f"  ROC-AUC:   {metrics['roc_auc']:.4f}")
+
+    return metrics

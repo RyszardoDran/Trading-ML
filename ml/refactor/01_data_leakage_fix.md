@@ -1,6 +1,6 @@
 # Faza 1: Data Leakage Fix
 
-**Status:** Planowanie  
+**Status:** ✅ Wdrożone  
 **Priorytet:** 🔴 CRITICAL  
 **Wpływ:** +5-15% zawyżenie metryk  
 
@@ -47,6 +47,63 @@ def aggregate_to_m5(df_m1: pd.DataFrame) -> pd.DataFrame:
     
     return df_m5  # Zawiera ALL data!
 ```
+
+## ✅ Rozwiązanie Wdrożone (Ulepszone)
+
+### Zmiany wprowadzone (lepsze niż opisane w pliku):
+
+1. **Zaktualizowana funkcja `aggregate_to_m5()` w `ml/src/features/engineer_m5.py`:**
+   - Dodane opcjonalne parametry `start_date` i `end_date` (lepsze niż `year_filter`)
+   - Filtracja danych wejściowych przed agregacją
+   - Zapobiega użyciu danych spoza zakresu czasowego
+
+```python
+def aggregate_to_m5(
+    df_m1: pd.DataFrame,
+    start_date: str = None,
+    end_date: str = None
+) -> pd.DataFrame:
+    """Aggregate M1 OHLCV data to M5 (5-minute) bars, with optional date filtering to prevent data leakage."""
+    
+    # Filter by date if specified
+    if start_date is not None:
+        df_m1 = df_m1[df_m1.index >= pd.to_datetime(start_date)]
+    if end_date is not None:
+        df_m1 = df_m1[df_m1.index <= pd.to_datetime(end_date)]
+    
+    # ... reszta kodu bez zmian
+```
+
+2. **Zaktualizowane wywołanie w pipeline `ml/src/pipelines/sequence_training_pipeline.py`:**
+   - Przekazywanie zakresu dat odpowiadającego cechom (dokładniejszy niż filtracja po latach)
+   - Eliminacja data leakage między feature engineering a target creation
+
+```python
+# CRITICAL: Get M5 aggregated data for target creation
+# Use only the date range present in features to avoid leakage
+from ml.src.features.engineer_m5 import aggregate_to_m5
+features_start = features.index.min()
+features_end = features.index.max()
+df_m5 = aggregate_to_m5(df_m1, start_date=str(features_start), end_date=str(features_end))
+```
+
+### Dlaczego lepsze niż opisane rozwiązanie:
+
+- **Dokładność**: Używa rzeczywistego zakresu cech zamiast filtracji po latach
+- **Elastyczność**: Nie ograniczone do granic lat (może filtrować dowolny zakres dat)
+- **Precyzja**: Zapewnia, że target creation używa dokładnie tych samych danych co feature engineering
+- **Bezpieczeństwo**: Eliminuje wszelkie możliwe wycieki między etapami pipeline'u
+
+### Weryfikacja:
+
+- ✅ Funkcja `aggregate_to_m5` filtruje dane przed agregacją
+- ✅ Pipeline przekazuje zakres dat z cech
+- ✅ Brak wycieku danych między feature engineering a target creation
+- ✅ Chronologiczny split pozostaje nienaruszony
+
+### Następne kroki:
+
+Przejść do **Fazy 2: Time Series Cross-Validation** zgodnie z planem refaktoryzacji.
 
 **Plik: `ml/src/pipelines/sequence_training_pipeline.py`**
 
