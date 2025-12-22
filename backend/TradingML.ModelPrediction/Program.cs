@@ -142,6 +142,7 @@ class Program
             // Get current window
             var windowCandles = candles.GetRange(i, WINDOW_SIZE_MINUTES);
             var windowEndTime = windowCandles.Last().Timestamp;
+            var windowEndIndex = i + WINDOW_SIZE_MINUTES - 1;
 
             // Run prediction on this window
             var result = await predictionService.PredictAsync(windowCandles);
@@ -176,6 +177,9 @@ class Program
                     ExpectedWinRate = result.ExpectedWinRate
                 };
 
+                // Evaluate trade outcome based on next candles
+                EvaluateTradeOutcome(windowResult, candles, windowEndIndex);
+
                 results.Add(windowResult);
 
                 // Print found signal
@@ -186,12 +190,73 @@ class Program
                 Console.WriteLine($"  Stop Loss:   {result.StopLoss?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
                 Console.WriteLine($"  Take Profit: {result.TakeProfit?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
                 Console.WriteLine($"  Probability: {result.Probability:P2}");
+
+                // Print outcome
+                if (windowResult.Outcome != "Pending")
+                {
+                    var outcomeColor = windowResult.Outcome == "Win" ? ConsoleColor.Green : ConsoleColor.Red;
+                    Console.ForegroundColor = outcomeColor;
+                    Console.WriteLine($"  Outcome: {windowResult.Outcome} | P&L: {windowResult.ProfitLoss?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
+                    Console.ResetColor();
+                }
                 Console.WriteLine();
             }
         }
 
         logger.LogInformation($"\nAnalysis complete. Total windows: {windowCount}, BUY signals found: {buySignalCount}");
         return results;
+    }
+
+    static void EvaluateTradeOutcome(SlidingWindowResult signal, List<Candle> allCandles, int windowEndIndex)
+    {
+        // Validate inputs
+        if (!signal.EntryPrice.HasValue || !signal.StopLoss.HasValue || !signal.TakeProfit.HasValue)
+            return;
+
+        // Look at future candles after the entry (starting from next candle)
+        var startIdx = windowEndIndex + 1;
+        if (startIdx >= allCandles.Count)
+            return; // No future data available
+
+        // Scan through future candles to find TP or SL hit
+        // This is a simple strategy: check if high >= TP (win) or low <= SL (loss)
+        for (int i = startIdx; i < Math.Min(startIdx + 100, allCandles.Count); i++) // Look ahead up to 100 candles
+        {
+            var candle = allCandles[i];
+            var entryPrice = signal.EntryPrice.Value;
+            var sl = signal.StopLoss.Value;
+            var tp = signal.TakeProfit.Value;
+
+            // Check if take profit was hit
+            if (candle.High >= tp)
+            {
+                signal.Outcome = "Win";
+                signal.ExitPrice = tp;
+                signal.ExitTime = candle.Timestamp;
+                signal.ProfitLoss = tp - entryPrice;
+                return;
+            }
+
+            // Check if stop loss was hit
+            if (candle.Low <= sl)
+            {
+                signal.Outcome = "Loss";
+                signal.ExitPrice = sl;
+                signal.ExitTime = candle.Timestamp;
+                signal.ProfitLoss = sl - entryPrice; // Will be negative
+                return;
+            }
+        }
+
+        // If neither TP nor SL hit in the lookahead window, check current price
+        if (startIdx < allCandles.Count)
+        {
+            var lastCandle = allCandles[Math.Min(startIdx + 99, allCandles.Count - 1)];
+            signal.ExitTime = lastCandle.Timestamp;
+            signal.ExitPrice = lastCandle.Close;
+            signal.ProfitLoss = lastCandle.Close - signal.EntryPrice.Value;
+            signal.Outcome = "Pending";
+        }
     }
 
     static void PrintResults(PredictionResult result, ModelMetadata metadata, ConsoleLogger<Program> logger)
@@ -272,27 +337,62 @@ class Program
     {
         try
         {
+            // Create output directory if it doesn't exist
+            var outputDir = Path.GetDirectoryName(outputFile);
+            if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
+            {
+                Directory.CreateDirectory(outputDir);
+                logger.LogInformation($"Created output directory: {outputDir}");
+            }
+
+            // Calculate summary statistics
+            var totalSignals = results.Count;
+            var winCount = results.Count(r => r.Outcome == "Win");
+            var lossCount = results.Count(r => r.Outcome == "Loss");
+            var pendingCount = results.Count(r => r.Outcome == "Pending");
+            var totalProfitLoss = results.Where(r => r.ProfitLoss.HasValue).Sum(r => r.ProfitLoss.Value);
+            var avgWin = results.Where(r => r.Outcome == "Win" && r.ProfitLoss.HasValue).Average(r => (double?)r.ProfitLoss) ?? 0;
+            var avgLoss = results.Where(r => r.Outcome == "Loss" && r.ProfitLoss.HasValue).Average(r => (double?)r.ProfitLoss) ?? 0;
+            var winRate = totalSignals > 0 ? (double)winCount / totalSignals : 0;
+            var profitableSignals = results.Where(r => r.ProfitLoss.HasValue && r.ProfitLoss.Value > 0).Count();
+            var profitabilityRate = totalSignals > 0 ? (double)profitableSignals / totalSignals : 0;
+
             var output = new
             {
-                TotalSignals = results.Count,
-                GeneratedAt = DateTime.UtcNow,
-                ModelThreshold = metadata.Threshold,
-                ModelWinRate = metadata.WinRate,
+                Summary = new
+                {
+                    TotalSignals = totalSignals,
+                    WonTrades = winCount,
+                    LostTrades = lossCount,
+                    PendingTrades = pendingCount,
+                    WinRate = $"{winRate:P2}",
+                    ProfitabilityRate = $"{profitabilityRate:P2}",
+                    TotalProfitLoss = $"{totalProfitLoss:0.#####}",
+                    AverageWin = $"{avgWin:0.#####}",
+                    AverageLoss = $"{avgLoss:0.#####}",
+                    GeneratedAt = DateTime.UtcNow,
+                    ModelThreshold = $"{metadata.Threshold:P2}",
+                    ModelWinRate = $"{metadata.WinRate:P2}"
+                },
                 Signals = results.Select(r => new
                 {
                     WindowIndex = r.WindowIndex,
                     EntryTime = r.EntryTime.ToString("yyyy-MM-dd HH:mm:ss"),
-                    EntryPrice = r.EntryPrice,
-                    StopLoss = r.StopLoss,
-                    TakeProfit = r.TakeProfit,
-                    Probability = r.Probability,
-                    Threshold = r.Threshold,
+                    EntryPrice = r.EntryPrice?.ToString("0.#####", CultureInfo.InvariantCulture),
+                    ExitTime = r.ExitTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    ExitPrice = r.ExitPrice?.ToString("0.#####", CultureInfo.InvariantCulture),
+                    StopLoss = r.StopLoss?.ToString("0.#####", CultureInfo.InvariantCulture),
+                    TakeProfit = r.TakeProfit?.ToString("0.#####", CultureInfo.InvariantCulture),
+                    Outcome = r.Outcome,
+                    ProfitLoss = r.ProfitLoss?.ToString("0.#####", CultureInfo.InvariantCulture),
+                    Probability = $"{r.Probability:P2}",
+                    Threshold = $"{r.Threshold:P2}",
                     Confidence = r.Confidence,
-                    AtrM5 = r.AtrM5,
-                    SlAtrMultiplier = r.SlAtrMultiplier,
-                    TpAtrMultiplier = r.TpAtrMultiplier,
-                    RiskRewardRatio = r.RiskRewardRatio,
-                    ExpectedWinRate = r.ExpectedWinRate
+                    AtrM5 = r.AtrM5?.ToString("0.#####", CultureInfo.InvariantCulture),
+                    SlAtrMultiplier = r.SlAtrMultiplier?.ToString("0.###", CultureInfo.InvariantCulture),
+                    TpAtrMultiplier = r.TpAtrMultiplier?.ToString("0.###", CultureInfo.InvariantCulture),
+                    RiskRewardRatio = r.RiskRewardRatio?.ToString("0.###", CultureInfo.InvariantCulture),
+                    ExpectedWinRate = r.ExpectedWinRate?.ToString("P2")
                 }).ToList()
             };
 
@@ -303,11 +403,52 @@ class Program
 
             File.WriteAllText(outputFile, json);
             logger.LogInformation($"Results saved to {outputFile}");
+
+            // Print summary to console
+            PrintSummary(winCount, lossCount, pendingCount, totalProfitLoss, winRate, avgWin, avgLoss);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, $"Failed to save results to {outputFile}");
         }
+    }
+
+    static void PrintSummary(int wins, int losses, int pending, double totalPnL, double winRate, double avgWin, double avgLoss)
+    {
+        Console.WriteLine();
+        Console.WriteLine("╔════════════════════════════════════════════════════════════════╗");
+        Console.WriteLine("║                    TRADING SUMMARY                             ║");
+        Console.WriteLine("╚════════════════════════════════════════════════════════════════╝");
+        Console.WriteLine();
+        Console.WriteLine($"  Total Signals:        {wins + losses + pending}");
+        
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"  Won Trades:           {wins}");
+        Console.ResetColor();
+        
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"  Lost Trades:          {losses}");
+        Console.ResetColor();
+        
+        Console.WriteLine($"  Pending Trades:       {pending}");
+        Console.WriteLine($"  Win Rate:             {winRate:P2}");
+        Console.WriteLine();
+        
+        Console.ForegroundColor = totalPnL >= 0 ? ConsoleColor.Green : ConsoleColor.Red;
+        Console.WriteLine($"  Total P&L:            {totalPnL:0.#####}");
+        Console.ResetColor();
+        
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"  Average Win:          {avgWin:0.#####}");
+        Console.ResetColor();
+        
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"  Average Loss:         {avgLoss:0.#####}");
+        Console.ResetColor();
+        
+        Console.WriteLine();
+        Console.WriteLine("╚════════════════════════════════════════════════════════════════╝");
+        Console.WriteLine();
     }
 
     static void SaveResults(
@@ -513,4 +654,8 @@ class SlidingWindowResult
     public double? TpAtrMultiplier { get; set; }
     public double? RiskRewardRatio { get; set; }
     public double? ExpectedWinRate { get; set; }
+    public string Outcome { get; set; } = "Pending"; // Win, Loss, Pending
+    public double? ProfitLoss { get; set; }
+    public DateTime? ExitTime { get; set; }
+    public double? ExitPrice { get; set; }
 }

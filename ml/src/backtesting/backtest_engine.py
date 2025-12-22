@@ -21,9 +21,9 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from ml.src.backtesting.config import BacktestConfig
-from ml.src.backtesting.metrics import calculate_all_metrics
-from ml.src.backtesting.position_sizer import PositionSizer
+from .config import BacktestConfig
+from .metrics import calculate_all_metrics
+from .position_sizer import PositionSizer
 
 logger = logging.getLogger(__name__)
 

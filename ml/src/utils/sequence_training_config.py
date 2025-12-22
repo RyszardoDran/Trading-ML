@@ -13,7 +13,7 @@ Example:
 from dataclasses import dataclass
 from pathlib import Path
 
-from ml.src.utils.risk_config import SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER
+from .risk_config import SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER
 
 # Get absolute path to ml/ directory
 _config_file = Path(__file__)

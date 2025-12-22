@@ -23,6 +23,77 @@ from sklearn.metrics import (
 logger = logging.getLogger(__name__)
 
 
+def _max_recall_possible_under_daily_cap(
+    y_true: np.ndarray,
+    timestamps: pd.DatetimeIndex | None,
+    max_trades_per_day: int | None,
+) -> float | None:
+    """Compute an upper bound on recall given a per-day trade cap.
+
+    If we can execute at most K trades per day and the evaluation window spans D
+    unique calendar days, then we can take at most K*D positive predictions.
+    Since recall = TP / P, the maximum possible recall is bounded by:
+        min(1, (K*D)/P)
+
+    Returns None when the cap is disabled or inputs are missing.
+    """
+    if (
+        timestamps is None
+        or max_trades_per_day is None
+        or max_trades_per_day <= 0
+        or y_true.size == 0
+    ):
+        return None
+
+    positives = int(np.sum(y_true == 1))
+    if positives <= 0:
+        return 1.0
+
+    days = len(np.unique(pd.DatetimeIndex(timestamps).date))
+    if days <= 0:
+        return None
+
+    max_trades_total = int(max_trades_per_day) * int(days)
+    return float(min(1.0, max_trades_total / positives))
+
+
+def _candidate_thresholds(
+    proba: np.ndarray,
+    *,
+    n: int = 401,
+    min_threshold: float = 0.001,
+    max_threshold: float = 0.99,
+) -> np.ndarray:
+    """Build a robust, data-driven threshold grid.
+
+    Why:
+        Using a fixed linspace like [0.15..0.95] can pin the result to the grid
+        boundary (e.g. always returning 0.15). A quantile-based grid adapts to
+        the model's probability calibration and keeps resolution where the data
+        actually lives.
+
+    Returns:
+        Sorted unique thresholds in (0, 1), clipped to [min_threshold, max_threshold].
+    """
+    if proba.size == 0:
+        return np.array([0.5], dtype=float)
+
+    min_threshold = float(np.clip(min_threshold, 0.0, 1.0))
+    max_threshold = float(np.clip(max_threshold, 0.0, 1.0))
+    if max_threshold <= min_threshold:
+        max_threshold = min(1.0, min_threshold + 1e-6)
+
+    q = np.linspace(0.0, 1.0, max(11, int(n)))
+    thresholds = np.quantile(proba, q)
+    thresholds = np.clip(thresholds, min_threshold, max_threshold)
+    thresholds = np.unique(thresholds.astype(float))
+
+    # Ensure bounds are present (useful for diagnostics)
+    thresholds = np.unique(np.concatenate(([min_threshold], thresholds, [max_threshold])))
+    thresholds.sort()
+    return thresholds
+
+
 def _apply_daily_cap(
     proba: np.ndarray,
     preds: np.ndarray,
@@ -75,10 +146,14 @@ def _pick_best_threshold_ev(
 ) -> float:
     """Select threshold maximizing Expected Value (EV) - profit/loss optimization.
 
-    Strategy:
-    - EV = Recall × win_coefficient - (1 - Recall) × abs(loss_coefficient)
-    - Maximizes expected profit per trade regardless of precision threshold
-    - Useful when you want to maximize profit rather than win rate floor
+        Strategy:
+        - EV per trade depends on win rate (precision), not recall:
+                EV_per_trade = precision * win_coefficient + (1 - precision) * loss_coefficient
+            where loss_coefficient is typically negative.
+        - We maximize total EV across the evaluation window:
+                EV_total = EV_per_trade * n_trades
+        - This naturally balances quality (precision) vs frequency (n_trades), while
+            still honoring min_trades and the optional daily cap.
 
     Args:
         y_true: True binary labels
@@ -93,13 +168,16 @@ def _pick_best_threshold_ev(
     Returns:
         Threshold value (float) that maximizes Expected Value
     """
-    thresholds = np.linspace(0.10, 0.95, 171)
+    thresholds = _candidate_thresholds(proba)
     if min_trades is None:
         min_trades = max(10, int(np.ceil(0.001 * len(y_true))))
 
     best_thr = 0.5
-    best_ev = float('-inf')
-    best_recall = -1.0
+    best_ev_total = float('-inf')
+    best_ev_per_trade = float('-inf')
+    best_prec = -1.0
+    best_rec = -1.0
+    best_trades = 0
 
     for t in thresholds:
         preds = (proba >= t).astype(int)
@@ -108,21 +186,41 @@ def _pick_best_threshold_ev(
         if n_trades < min_trades:
             continue
 
-        # Calculate EV as: Recall × win_coeff - (1 - Recall) × loss_coeff
-        recall = recall_score(y_true, preds, zero_division=0)
-        ev = recall * win_coefficient - (1.0 - recall) * abs(loss_coefficient)
+        prec = precision_score(y_true, preds, zero_division=0)
+        rec = recall_score(y_true, preds, zero_division=0)
 
-        # Prefer higher EV; tie-break by higher recall then lower threshold
-        if (ev > best_ev) or (np.isclose(ev, best_ev) and recall > best_recall) or (
-            np.isclose(ev, best_ev) and np.isclose(recall, best_recall) and t < best_thr
+        ev_per_trade = prec * win_coefficient + (1.0 - prec) * loss_coefficient
+        ev_total = ev_per_trade * float(n_trades)
+
+        # Prefer higher total EV; tie-break by higher EV/trade then more recall then lower threshold
+        if (
+            (ev_total > best_ev_total)
+            or (np.isclose(ev_total, best_ev_total) and ev_per_trade > best_ev_per_trade)
+            or (np.isclose(ev_total, best_ev_total) and np.isclose(ev_per_trade, best_ev_per_trade) and rec > best_rec)
+            or (
+                np.isclose(ev_total, best_ev_total)
+                and np.isclose(ev_per_trade, best_ev_per_trade)
+                and np.isclose(rec, best_rec)
+                and t < best_thr
+            )
         ):
-            best_ev = ev
-            best_recall = recall
+            best_ev_total = float(ev_total)
+            best_ev_per_trade = float(ev_per_trade)
+            best_prec = float(prec)
+            best_rec = float(rec)
+            best_trades = int(n_trades)
             best_thr = float(t)
 
+    if np.isclose(best_thr, float(thresholds[0])) or np.isclose(best_thr, float(thresholds[-1])):
+        logger.warning(
+            f"EV selected boundary threshold={best_thr:.4f} (grid=[{thresholds[0]:.4f}..{thresholds[-1]:.4f}], size={len(thresholds)}). "
+            "This can indicate the optimum lies outside the current grid or probabilities are compressed."
+        )
+
     logger.info(
-        f"EV-optimized threshold: {best_thr:.2f} with EV={best_ev:.4f} "
-        f"(recall={best_recall:.4f}, win_coeff={win_coefficient}, loss_coeff={loss_coefficient})"
+        f"EV-optimized threshold: {best_thr:.4f} with EV_total={best_ev_total:.4f} "
+        f"(EV/trade={best_ev_per_trade:.4f}, precision={best_prec:.4f}, recall={best_rec:.4f}, trades={best_trades}, "
+        f"win_coeff={win_coefficient}, loss_coeff={loss_coefficient})"
     )
 
     return best_thr
@@ -141,10 +239,14 @@ def _pick_best_threshold_hybrid(
 ) -> float:
     """Select threshold maximizing EV under precision AND recall constraints (HYBRID).
 
-    Strategy:
-    - Enforce BOTH precision floor AND recall floor for quality + quantity balance
-    - Among feasible thresholds (meeting both constraints), maximize Expected Value
-    - Best of both worlds: precision protection + better recall
+        Strategy:
+        - Enforce precision floor (win-rate protection) and an optional recall floor.
+        - Among feasible thresholds, maximize total Expected Value (EV_total), where
+            EV is based on precision (not recall):
+                EV_per_trade = precision * win_coefficient + (1 - precision) * loss_coefficient
+                EV_total = EV_per_trade * n_trades
+        - This behaves sensibly under a daily cap: thresholds that only change
+            "how many candidates enter top-K" are not incorrectly rewarded by recall-only EV.
 
     Args:
         y_true: True binary labels
@@ -161,14 +263,28 @@ def _pick_best_threshold_hybrid(
     Returns:
         Threshold value (float) that maximizes EV under constraints
     """
-    thresholds = np.linspace(0.10, 0.95, 171)
+    max_recall_possible = _max_recall_possible_under_daily_cap(
+        y_true, timestamps, max_trades_per_day
+    )
+    if max_recall_possible is not None and max_recall_possible + 1e-12 < min_recall:
+        logger.warning(
+            "Recall floor is infeasible under daily cap: "
+            f"min_recall={min_recall:.2f} but max_possible_recall≈{max_recall_possible:.4f} "
+            f"(max_trades_per_day={max_trades_per_day}). "
+            "Relaxing min_recall to the feasible maximum for HYBRID search."
+        )
+        min_recall = max_recall_possible
+
+    thresholds = _candidate_thresholds(proba)
     if min_trades is None:
         min_trades = max(10, int(np.ceil(0.001 * len(y_true))))
 
     best_thr = 0.5
-    best_ev = float('-inf')
+    best_ev_total = float('-inf')
+    best_ev_per_trade = float('-inf')
     best_prec = -1.0
     best_rec = -1.0
+    best_trades = 0
 
     for t in thresholds:
         preds = (proba >= t).astype(int)
@@ -184,35 +300,83 @@ def _pick_best_threshold_hybrid(
         if prec < min_precision or rec < min_recall:
             continue
 
-        # Among feasible thresholds, maximize EV
-        ev = rec * win_coefficient - (1.0 - rec) * abs(loss_coefficient)
+        ev_per_trade = prec * win_coefficient + (1.0 - prec) * loss_coefficient
+        ev_total = ev_per_trade * float(n_trades)
 
-        if (ev > best_ev) or (np.isclose(ev, best_ev) and rec > best_rec) or (
-            np.isclose(ev, best_ev) and np.isclose(rec, best_rec) and t < best_thr
+        if (
+            (ev_total > best_ev_total)
+            or (np.isclose(ev_total, best_ev_total) and ev_per_trade > best_ev_per_trade)
+            or (np.isclose(ev_total, best_ev_total) and np.isclose(ev_per_trade, best_ev_per_trade) and rec > best_rec)
+            or (
+                np.isclose(ev_total, best_ev_total)
+                and np.isclose(ev_per_trade, best_ev_per_trade)
+                and np.isclose(rec, best_rec)
+                and t < best_thr
+            )
         ):
-            best_ev = ev
-            best_prec = prec
-            best_rec = rec
+            best_ev_total = float(ev_total)
+            best_ev_per_trade = float(ev_per_trade)
+            best_prec = float(prec)
+            best_rec = float(rec)
+            best_trades = int(n_trades)
             best_thr = float(t)
 
-    if best_ev == float('-inf'):
+    if best_ev_total == float('-inf'):
         logger.warning(
             f"No threshold met BOTH precision >= {min_precision:.2f} AND recall >= {min_recall:.2f} "
-            f"with >= {min_trades} trades. Falling back to F1-optimized with precision floor."
+            f"with >= {min_trades} trades. Using improved fallback: maximize F1 with relaxed constraints."
         )
-        best_thr = _pick_best_threshold(
-            y_true,
-            proba,
-            min_precision=min_precision,
-            min_trades=min_trades,
-            timestamps=timestamps,
-            max_trades_per_day=max_trades_per_day,
+        
+        # Improved fallback: Find threshold that best balances precision and recall
+        # Priority: maximize F1 score among all thresholds
+        best_f1 = -1.0
+        best_thr_f1 = 0.5
+        best_prec_f1 = -1.0
+        best_rec_f1 = -1.0
+        
+        for t in thresholds:
+            preds = (proba >= t).astype(int)
+            preds = _apply_daily_cap(proba, preds, timestamps, max_trades_per_day)
+            n_trades = int(preds.sum())
+            if n_trades < min_trades:
+                continue
+            
+            prec = precision_score(y_true, preds, zero_division=0)
+            rec = recall_score(y_true, preds, zero_division=0)
+            f1 = f1_score(y_true, preds, zero_division=0)
+            
+            # Find threshold with highest F1
+            if f1 > best_f1:
+                best_f1 = f1
+                best_thr_f1 = float(t)
+                best_prec_f1 = prec
+                best_rec_f1 = rec
+        
+        if best_f1 > -1.0:
+            if np.isclose(best_thr_f1, float(thresholds[0])) or np.isclose(best_thr_f1, float(thresholds[-1])):
+                logger.warning(
+                    f"Fallback selected boundary threshold={best_thr_f1:.4f} (grid=[{thresholds[0]:.4f}..{thresholds[-1]:.4f}], size={len(thresholds)}). "
+                    "If this repeats, consider widening candidate grid or reviewing probability calibration."
+                )
+            logger.info(
+                f"Fallback F1-optimized threshold: {best_thr_f1:.4f} "
+                f"(F1={best_f1:.4f}, precision={best_prec_f1:.4f}, recall={best_rec_f1:.4f})"
+            )
+            return best_thr_f1
+        else:
+            logger.error(
+                f"CRITICAL: No valid threshold found. Using min_trades fallback (threshold=0.50)"
+            )
+            return 0.5
+
+    if np.isclose(best_thr, float(thresholds[0])) or np.isclose(best_thr, float(thresholds[-1])):
+        logger.warning(
+            f"Hybrid selected boundary threshold={best_thr:.4f} (grid=[{thresholds[0]:.4f}..{thresholds[-1]:.4f}], size={len(thresholds)})."
         )
-        return best_thr
 
     logger.info(
-        f"Hybrid-optimized threshold: {best_thr:.2f} with EV={best_ev:.4f} "
-        f"(precision={best_prec:.4f}, recall={best_rec:.4f}, "
+        f"Hybrid-optimized threshold: {best_thr:.4f} with EV_total={best_ev_total:.4f} "
+        f"(EV/trade={best_ev_per_trade:.4f}, precision={best_prec:.4f}, recall={best_rec:.4f}, trades={best_trades}, "
         f"win_coeff={win_coefficient}, loss_coeff={loss_coefficient})"
     )
 
@@ -246,7 +410,7 @@ def _pick_best_threshold(
     Returns:
         Threshold value (float) that maximizes F1 under constraints
     """
-    thresholds = np.linspace(0.20, 0.95, 151)
+    thresholds = _candidate_thresholds(proba)
     if min_trades is None:
         min_trades = max(25, int(np.ceil(0.002 * len(y_true))))
 
@@ -296,6 +460,11 @@ def _pick_best_threshold(
                 best_prec = prec
                 best_rec = rec
                 best_thr = float(t)
+
+    if np.isclose(best_thr, float(thresholds[0])) or np.isclose(best_thr, float(thresholds[-1])):
+        logger.warning(
+            f"F1 selected boundary threshold={best_thr:.4f} (grid=[{thresholds[0]:.4f}..{thresholds[-1]:.4f}], size={len(thresholds)})."
+        )
 
     return best_thr
 
@@ -353,13 +522,29 @@ def evaluate(
     if not np.isfinite(proba).all():
         raise ValueError("Non-finite probabilities produced; check feature values and calibration")
     
-    # Log probability stats
-    logger.info(f"Probability stats: min={proba.min():.4f}, max={proba.max():.4f}, mean={proba.mean():.4f}, std={proba.std():.4f}")
+    # Log probability stats + selection constraints (helps explain "stuck" thresholds)
+    logger.info(
+        "Probability stats: "
+        f"min={proba.min():.4f}, max={proba.max():.4f}, mean={proba.mean():.4f}, std={proba.std():.4f}"
+    )
+    logger.info(
+        f"Threshold constraints: min_precision={min_precision:.2f}, min_recall={min_recall:.2f}, "
+        f"min_trades={min_trades if min_trades is not None else 'auto'}, max_trades_per_day={max_trades_per_day}"
+    )
+
+    max_recall_possible = _max_recall_possible_under_daily_cap(
+        y_test, test_timestamps, max_trades_per_day
+    )
+    if max_recall_possible is not None:
+        logger.info(
+            f"Daily-cap recall upper bound: max_possible_recall≈{max_recall_possible:.4f} "
+            f"(max_trades_per_day={max_trades_per_day})"
+        )
     
     # Metrics
     roc = roc_auc_score(y_test, proba)
     if roc < 0.52:
-        logger.warning(f"⚠️  Model has very low discriminative power (ROC-AUC={roc:.4f}). Results may be random.")
+        logger.warning(f"[WARNING] Model has very low discriminative power (ROC-AUC={roc:.4f}). Results may be random.")
     
     pr_auc = average_precision_score(y_test, proba)
     
@@ -407,11 +592,32 @@ def evaluate(
     
     preds = (proba >= thr).astype(int)
     preds = _apply_daily_cap(proba, preds, test_timestamps, max_trades_per_day)
+
+    # If a daily cap is active, many thresholds below the (per-day) top-K cutoff
+    # produce identical final predictions (cap dominates). To keep the stored
+    # threshold meaningful for downstream consumers, normalize it to the
+    # effective cutoff implied by the finally selected trades.
+    if max_trades_per_day is not None and max_trades_per_day > 0 and test_timestamps is not None:
+        selected_idx = np.where(preds == 1)[0]
+        if selected_idx.size > 0:
+            effective_thr = float(np.min(proba[selected_idx]))
+            if np.isfinite(effective_thr) and 0.0 <= effective_thr <= 1.0:
+                # Recompute predictions using the effective threshold for consistency.
+                thr = effective_thr
+                preds = (proba >= thr).astype(int)
+                preds = _apply_daily_cap(proba, preds, test_timestamps, max_trades_per_day)
     
-    cm = confusion_matrix(y_test, preds)
-    logger.info(f"Confusion matrix@thr={thr:.2f}:")
+    cm = confusion_matrix(y_test, preds, labels=[0, 1])
+    logger.info(f"Confusion matrix@thr={thr:.4f}:")
     logger.info(f"  [[TN={cm[0,0]}, FP={cm[0,1]}],")
     logger.info(f"   [FN={cm[1,0]}, TP={cm[1,1]}]]")
+
+    if max_trades_per_day is not None and max_trades_per_day > 0 and test_timestamps is not None:
+        selected = np.where(preds == 1)[0]
+        if selected.size > 0:
+            logger.info(
+                f"Effective min proba among selected trades (after daily cap) = {float(np.min(proba[selected])):.4f}"
+            )
 
     precision = precision_score(y_test, preds, zero_division=0)
     recall = recall_score(y_test, preds, zero_division=0)

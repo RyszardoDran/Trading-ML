@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from ml.src.backtesting.position_sizer import PositionSizingMethod
+from .position_sizer import PositionSizingMethod
 
 
 @dataclass

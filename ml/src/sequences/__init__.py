@@ -13,9 +13,9 @@ Example:
     >>> X, y, ts = create_sequences(features, targets, window_size=100)
 """
 
-from ml.src.sequences.sequencer import create_sequences
-from ml.src.sequences.filters import filter_by_session
-from ml.src.sequences.config import SequenceFilterConfig
+from .sequencer import create_sequences
+from .filters import filter_by_session
+from .config import SequenceFilterConfig
 
 __all__ = ["create_sequences", "filter_by_session", "SequenceFilterConfig"]
 

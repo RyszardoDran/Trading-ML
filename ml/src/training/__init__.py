@@ -13,10 +13,10 @@ Example:
     metrics = evaluate(model, X_test, y_test)
 """
 
-from ml.src.training.sequence_xgb_trainer import train_xgb
-from ml.src.training.sequence_evaluation import evaluate
-from ml.src.training.sequence_feature_analysis import analyze_feature_importance
-from ml.src.training.sequence_artifacts import save_artifacts
+from .sequence_xgb_trainer import train_xgb
+from .sequence_evaluation import evaluate
+from .sequence_feature_analysis import analyze_feature_importance
+from .sequence_artifacts import save_artifacts
 
 __all__ = [
     "train_xgb",

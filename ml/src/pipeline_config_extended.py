@@ -100,6 +100,11 @@ class PipelineParams:
     ev_win_coefficient: float
     ev_loss_coefficient: float
     
+    # Cost-Sensitive Learning (POINT 1)
+    use_cost_sensitive_learning: bool
+    sample_weight_positive: float
+    sample_weight_negative: float
+    
     # M5 alignment filter
     enable_m5_alignment: bool
     
@@ -143,6 +148,9 @@ class PipelineParams:
             use_hybrid_optimization=args.use_hybrid_optimization,
             ev_win_coefficient=args.ev_win_coefficient,
             ev_loss_coefficient=args.ev_loss_coefficient,
+            use_cost_sensitive_learning=args.use_cost_sensitive_learning,
+            sample_weight_positive=args.sample_weight_positive,
+            sample_weight_negative=args.sample_weight_negative,
             enable_m5_alignment=not args.skip_m5_alignment,
             enable_trend_filter=not args.disable_trend_filter,
             trend_min_dist_sma200=None if args.disable_trend_filter else args.trend_min_dist_sma200,
@@ -201,6 +209,9 @@ class PipelineParams:
         # Threshold validation
         if not (0 <= self.min_precision <= 1):
             raise ValueError(f"min_precision must be in [0, 1], got {self.min_precision}")
+
+        if not (0 <= self.min_recall <= 1):
+            raise ValueError(f"min_recall must be in [0, 1], got {self.min_recall}")
         
         if self.min_trades is not None and self.min_trades < 1:
             raise ValueError(f"min_trades must be >= 1 or None, got {self.min_trades}")

@@ -60,12 +60,20 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-# Add src to path to allow imports
-sys.path.append(str(Path(__file__).parent.parent))
+# Setup imports for both contexts:
+# 1. When called directly from ml/src/scripts: add ml to path
+# 2. When called from pipeline: use ml.src imports
+script_dir = Path(__file__).resolve()
+src_dir = script_dir.parent.parent
+ml_dir = src_dir.parent
 
-from features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
-from features.indicators import compute_atr
-from utils.risk_config import ATR_PERIOD_M5, SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER, risk_reward_ratio
+# Add ml to path for package imports
+sys.path.insert(0, str(ml_dir))
+
+# Now import using ml.src package path
+from src.features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
+from src.features.indicators import compute_atr
+from src.utils.risk_config import ATR_PERIOD_M5, SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER, risk_reward_ratio
 
 # Suppress sklearn version warnings
 import warnings

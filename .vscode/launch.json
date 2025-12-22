@@ -11,7 +11,7 @@
         "--candles-file",
         "${workspaceFolder}/backend/TradingML.ModelPrediction/Data/XAU_1m_data_2025.csv",
         "--output",
-        "${workspaceFolder}/ml/outputs/prediction_2025.json"
+        "${workspaceFolder}/backend/outputs/prediction_2025.json"
       ],
       "cwd": "${workspaceFolder}/backend/TradingML.ModelPrediction",
       "console": "integratedTerminal",

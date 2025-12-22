@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from ml.src.sequences.config import SequenceFilterConfig
+from .config import SequenceFilterConfig
 
 logger = logging.getLogger(__name__)
 

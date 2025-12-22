@@ -258,9 +258,15 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         use_hybrid_optimization=params.use_hybrid_optimization,
         ev_win_coefficient=params.ev_win_coefficient,
         ev_loss_coefficient=params.ev_loss_coefficient,
+        use_cost_sensitive_learning=params.use_cost_sensitive_learning,
+        sample_weight_positive=params.sample_weight_positive,
+        sample_weight_negative=params.sample_weight_negative,
     )
     
     # ===== STAGE 7: Save artifacts =====
+    threshold_strategy = (
+        "hybrid" if params.use_hybrid_optimization else "ev" if params.use_ev_optimization else "f1"
+    )
     save_model_artifacts(
         model=model,
         scaler=scaler,
@@ -270,6 +276,10 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         win_rate=metrics["win_rate"],
         window_size=params.window_size,
         analysis_window_days=7,  # Recommend 7 days for robust indicator calculation
+        max_trades_per_day=params.max_trades_per_day,
+        min_precision=params.min_precision,
+        min_recall=params.min_recall,
+        threshold_strategy=threshold_strategy,
     )
     
     return metrics

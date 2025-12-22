@@ -14,7 +14,7 @@ Notes:
     - All features validated and production-ready
 """
 
-from ml.src.features.engineer import engineer_candle_features
+from .engineer import engineer_candle_features
 
 __all__ = ["engineer_candle_features"]
 

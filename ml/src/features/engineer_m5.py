@@ -39,12 +39,12 @@ import logging
 import numpy as np
 import pandas as pd
 
-from ml.src.features.indicators import (
+from .indicators import (
     compute_rsi, compute_stochastic, compute_macd, 
     compute_adx, compute_bollinger_bands, compute_atr,
     compute_cvd, compute_obv, compute_mfi
 )
-from ml.src.utils.risk_config import (
+from ..utils.risk_config import (
     CVD_LOOKBACK_WINDOW, ENABLE_CVD_INDICATOR,
     FEAT_ENABLE_RSI, FEAT_ENABLE_BB_POS, FEAT_ENABLE_SMA_DIST,
     FEAT_ENABLE_STOCH, FEAT_ENABLE_MACD, FEAT_ENABLE_ATR,
@@ -293,12 +293,13 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     else:
         mfi_m15_norm = pd.Series(0.0, index=df_m15.index)
     
-    # Align M15 to M5 index (forward-fill)
-    rsi_m15 = rsi_m15.reindex(df_m5.index, method='ffill').fillna(50)
-    bb_pos_m15 = bb_pos_m15.reindex(df_m5.index, method='ffill').fillna(0.5)
-    dist_sma_20_m15 = dist_sma_20_m15.reindex(df_m5.index, method='ffill').fillna(0)
-    volume_m15_norm = volume_m15_norm.reindex(df_m5.index, method='ffill').fillna(1.0)
-    cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='ffill').fillna(0)
+    # Align M15 to M5 index (backward-fill to avoid lookahead)
+    # Use bfill instead of ffill: at time T, use PREVIOUS M15 bar that closed BEFORE T
+    rsi_m15 = rsi_m15.reindex(df_m5.index, method='bfill').fillna(50)
+    bb_pos_m15 = bb_pos_m15.reindex(df_m5.index, method='bfill').fillna(0.5)
+    dist_sma_20_m15 = dist_sma_20_m15.reindex(df_m5.index, method='bfill').fillna(0)
+    volume_m15_norm = volume_m15_norm.reindex(df_m5.index, method='bfill').fillna(1.0)
+    cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='bfill').fillna(0)
     
     # ========== M60 Context (from M5) ==========
     logger.info("Computing M60 context from M5...")
@@ -346,12 +347,13 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     else:
         mfi_m60_norm = pd.Series(0.0, index=df_m60.index)
     
-    # Align M60 to M5 index (forward-fill)
-    rsi_m60 = rsi_m60.reindex(df_m5.index, method='ffill').fillna(50)
-    bb_pos_m60 = bb_pos_m60.reindex(df_m5.index, method='ffill').fillna(0.5)
-    cvd_m60_norm = cvd_m60_norm.reindex(df_m5.index, method='ffill').fillna(0)
-    obv_m60_norm = obv_m60_norm.reindex(df_m5.index, method='ffill').fillna(0)
-    mfi_m60_norm = mfi_m60_norm.reindex(df_m5.index, method='ffill').fillna(0)
+    # Align M60 to M5 index (backward-fill to avoid lookahead)
+    # Use bfill instead of ffill: at time T, use PREVIOUS M60 bar that closed BEFORE T
+    rsi_m60 = rsi_m60.reindex(df_m5.index, method='bfill').fillna(50)
+    bb_pos_m60 = bb_pos_m60.reindex(df_m5.index, method='bfill').fillna(0.5)
+    cvd_m60_norm = cvd_m60_norm.reindex(df_m5.index, method='bfill').fillna(0)
+    obv_m60_norm = obv_m60_norm.reindex(df_m5.index, method='bfill').fillna(0)
+    mfi_m60_norm = mfi_m60_norm.reindex(df_m5.index, method='bfill').fillna(0)
     
     # ========== Create M5 Features DataFrame ==========
     features_dict = {}

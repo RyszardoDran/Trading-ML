@@ -13,9 +13,9 @@ Example:
     >>> results = engine.run(predictions, prices)
 """
 
-from ml.src.backtesting.backtest_engine import BacktestEngine
-from ml.src.backtesting.config import BacktestConfig
-from ml.src.backtesting.position_sizer import PositionSizer, PositionSizingMethod
+from .backtest_engine import BacktestEngine
+from .config import BacktestConfig
+from .position_sizer import PositionSizer, PositionSizingMethod
 
 __all__ = [
     "BacktestEngine",

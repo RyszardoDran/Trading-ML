@@ -14,7 +14,7 @@ import argparse
 from typing import Optional
 
 # Import canonical parameters from risk_config
-from ml.src.utils.risk_config import (
+from .utils.risk_config import (
     ENABLE_M5_ALIGNMENT,
     ENABLE_PULLBACK_FILTER,
     ENABLE_TREND_FILTER,
@@ -27,10 +27,13 @@ from ml.src.utils.risk_config import (
     MIN_RECALL_FLOOR,
     MIN_TRADES_PER_TEST,
     PULLBACK_MAX_RSI_M5,
+    SAMPLE_WEIGHT_NEGATIVE,
+    SAMPLE_WEIGHT_POSITIVE,
     SL_ATR_MULTIPLIER,
     TP_ATR_MULTIPLIER,
     TREND_MIN_ADX,
     TREND_MIN_DIST_SMA200,
+    USE_COST_SENSITIVE_LEARNING,
     USE_EV_OPTIMIZATION,
     USE_HYBRID_OPTIMIZATION,
     WINDOW_SIZE,
@@ -201,6 +204,26 @@ def parse_cli_arguments() -> argparse.Namespace:
         type=float,
         default=EV_LOSS_COEFFICIENT,
         help=f"Loss multiplier for incorrect predictions in EV mode (default: {EV_LOSS_COEFFICIENT})",
+    )
+    
+    # ===== Cost-Sensitive Learning (POINT 1) =====
+    parser.add_argument(
+        "--use-cost-sensitive-learning",
+        type=lambda x: x.lower() in ('true', '1', 'yes'),
+        default=USE_COST_SENSITIVE_LEARNING,
+        help=f"Enable cost-sensitive learning: penalize FP more than FN (default: {USE_COST_SENSITIVE_LEARNING} from risk_config.py)",
+    )
+    parser.add_argument(
+        "--sample-weight-positive",
+        type=float,
+        default=SAMPLE_WEIGHT_POSITIVE,
+        help=f"Weight for positive class samples (True Positives get more 'vote', default: {SAMPLE_WEIGHT_POSITIVE})",
+    )
+    parser.add_argument(
+        "--sample-weight-negative",
+        type=float,
+        default=SAMPLE_WEIGHT_NEGATIVE,
+        help=f"Weight for negative class samples (baseline, default: {SAMPLE_WEIGHT_NEGATIVE})",
     )
     
     # ===== Feature engineering version =====

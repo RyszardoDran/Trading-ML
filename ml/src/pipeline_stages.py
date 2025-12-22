@@ -31,12 +31,12 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import RobustScaler
 
-from ml.src.data_loading import load_all_years
-from ml.src.features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
-from ml.src.pipelines.sequence_split import split_sequences
-from ml.src.sequences import SequenceFilterConfig, create_sequences
-from ml.src.targets import make_target
-from ml.src.training import evaluate, save_artifacts, train_xgb
+from .data_loading import load_all_years
+from .features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
+from .pipelines.sequence_split import split_sequences
+from .sequences import SequenceFilterConfig, create_sequences
+from .targets import make_target
+from .training import evaluate, save_artifacts, train_xgb
 
 logger = logging.getLogger(__name__)
 
@@ -435,6 +435,9 @@ def train_and_evaluate_stage(
     use_hybrid_optimization: bool = True,
     ev_win_coefficient: float = 1.0,
     ev_loss_coefficient: float = -1.0,
+    use_cost_sensitive_learning: bool = True,
+    sample_weight_positive: float = 3.0,
+    sample_weight_negative: float = 1.0,
 ) -> tuple[dict[str, float], object]:
     """Train XGBoost model with calibration and evaluate on test set.
     
@@ -475,8 +478,20 @@ def train_and_evaluate_stage(
         >>> metrics['threshold']
         0.45
     """
+    # ===== POINT 1: Cost-Sensitive Learning =====
+    sample_weight = None
+    if use_cost_sensitive_learning:
+        logger.info(f"\n[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...")
+        logger.info(f"  Sample weights: positive={sample_weight_positive:.1f}, negative={sample_weight_negative:.1f}")
+        sample_weight = np.where(
+            y_train == 1,
+            sample_weight_positive,
+            sample_weight_negative
+        ).astype(np.float32)
+        logger.info(f"  Weight ratio (positive/negative): {sample_weight_positive / sample_weight_negative:.2f}x")
+    
     logger.info("Training XGBoost classifier...")
-    model = train_xgb(X_train_scaled, y_train, X_val_scaled, y_val, random_state=random_state)
+    model = train_xgb(X_train_scaled, y_train, X_val_scaled, y_val, random_state=random_state, sample_weight=sample_weight)
     
     logger.info("Evaluating model on test set...")
     metrics = evaluate(
@@ -495,7 +510,7 @@ def train_and_evaluate_stage(
     )
     
     logger.info(
-        f"Evaluation metrics: threshold={metrics['threshold']:.2f}, "
+        f"Evaluation metrics: threshold={metrics['threshold']:.4f}, "
         f"win_rate={metrics['win_rate']:.4f} ({metrics['win_rate']:.2%}), "
         f"precision={metrics['precision']:.4f}, recall={metrics['recall']:.4f}, "
         f"f1={metrics['f1']:.4f}, roc_auc={metrics['roc_auc']:.4f}, "
@@ -514,6 +529,11 @@ def save_model_artifacts(
     win_rate: float,
     window_size: int,
     analysis_window_days: int = 7,
+    *,
+    max_trades_per_day: int | None = None,
+    min_precision: float | None = None,
+    min_recall: float | None = None,
+    threshold_strategy: str | None = None,
 ) -> None:
     """Save trained model and artifacts to disk.
     
@@ -550,5 +570,9 @@ def save_model_artifacts(
         win_rate,
         window_size,
         analysis_window_days,
+        max_trades_per_day=max_trades_per_day,
+        min_precision=min_precision,
+        min_recall=min_recall,
+        threshold_strategy=threshold_strategy,
     )
     logger.info(f"Artifacts saved to {models_dir}")

@@ -14,7 +14,7 @@ import numpy as np
 from xgboost import XGBClassifier
 from sklearn.preprocessing import RobustScaler
 
-from ml.src.training.sequence_feature_analysis import analyze_feature_importance
+from .sequence_feature_analysis import analyze_feature_importance
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,11 @@ def save_artifacts(
     win_rate: float,
     window_size: int,
     analysis_window_days: int = 7,
+    *,
+    max_trades_per_day: int | None = None,
+    min_precision: float | None = None,
+    min_recall: float | None = None,
+    threshold_strategy: str | None = None,
 ) -> None:
     """Save trained model, scaler, and metadata to disk.
 
@@ -94,6 +99,16 @@ def save_artifacts(
         "recommended_min_candles": window_size + 200,  # Conservative: window + SMA200
         "recommended_analysis_candles": analysis_window_days * 24 * 60,  # Days to M1 candles
     }
+
+    # Optional knobs (help with reproducibility and inference policy)
+    if max_trades_per_day is not None:
+        metadata["max_trades_per_day"] = int(max_trades_per_day)
+    if min_precision is not None:
+        metadata["min_precision"] = float(min_precision)
+    if min_recall is not None:
+        metadata["min_recall"] = float(min_recall)
+    if threshold_strategy is not None:
+        metadata["threshold_strategy"] = str(threshold_strategy)
     with open(models_dir / "sequence_threshold.json", "w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
     logger.info(f"Saved metadata to sequence_threshold.json (analysis_window={analysis_window_days} days)")

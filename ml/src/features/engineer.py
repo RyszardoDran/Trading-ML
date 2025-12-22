@@ -50,7 +50,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from ml.src.features.indicators import (
+from .indicators import (
     compute_rsi, compute_stochastic, compute_williams_r, compute_cci,
     compute_macd, compute_adx, compute_bollinger_bands, compute_atr
 )
