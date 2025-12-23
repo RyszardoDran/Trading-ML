@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\anajdere\\source\\repos\\Tst IDT\\ML\\Trading-ML\\backend\\TradingML.ModelPrediction\\TradingML.ModelPrediction.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\anajdere\\source\\repos\\Tst IDT\\ML\\Trading-ML\\backend\\TradingML.ModelPrediction\\TradingML.ModelPrediction.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\anajdere\\source\\repos\\Tst IDT\\ML\\Trading-ML\\backend\\TradingML.ModelPrediction\\TradingML.ModelPrediction.csproj",
+        "projectName": "TradingML.ModelPrediction",
+        "projectPath": "C:\\Users\\anajdere\\source\\repos\\Tst IDT\\ML\\Trading-ML\\backend\\TradingML.ModelPrediction\\TradingML.ModelPrediction.csproj",
+        "packagesPath": "C:\\Users\\anajdere\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\anajdere\\source\\repos\\Tst IDT\\ML\\Trading-ML\\backend\\TradingML.ModelPrediction\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\anajdere\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "frameworks": {
+          "net9.0": {
+            "targetAlias": "net9.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.100"
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "dependencies": {
+            "System.Text.Json": {
+              "target": "Package",
+              "version": "[8.0.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.112/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

@@ -743,6 +743,7 @@ def train_and_evaluate_stage(
     use_cost_sensitive_learning: bool = True,
     sample_weight_positive: float = 3.0,
     sample_weight_negative: float = 1.0,
+    ts_val: pd.DatetimeIndex | None = None,
 ) -> tuple[dict[str, float], object]:
     """Train model with proper validation/test separation.
 
@@ -826,7 +827,7 @@ def train_and_evaluate_stage(
             ev_win_coefficient=ev_win_coefficient,
             ev_loss_coefficient=ev_loss_coefficient,
             min_trades=min_trades,
-            timestamps=None,  # For now, no timestamps on val
+            timestamps=ts_val,  # Use VAL timestamps so daily cap is respected
             max_trades_per_day=max_trades_per_day,
         )
 

@@ -1,0 +1,15 @@
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\bin\Debug\net9.0\TradingML.ModelPrediction.exe
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\bin\Debug\net9.0\TradingML.ModelPrediction.deps.json
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\bin\Debug\net9.0\TradingML.ModelPrediction.runtimeconfig.json
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\bin\Debug\net9.0\TradingML.ModelPrediction.dll
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\bin\Debug\net9.0\TradingML.ModelPrediction.pdb
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\TradingML.ModelPrediction.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\TradingML.ModelPrediction.AssemblyInfoInputs.cache
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\TradingML.ModelPrediction.AssemblyInfo.cs
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\TradingML.ModelPrediction.csproj.CoreCompileInputs.cache
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\TradingML.ModelPrediction.sourcelink.json
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\TradingML.ModelPrediction.dll
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\refint\TradingML.ModelPrediction.dll
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\TradingML.ModelPrediction.pdb
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\TradingML.ModelPrediction.genruntimeconfig.cache
+C:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\backend\TradingML.ModelPrediction\obj\Debug\net9.0\ref\TradingML.ModelPrediction.dll

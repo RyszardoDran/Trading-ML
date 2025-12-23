@@ -118,11 +118,17 @@ def create_sequences(
     # ------------------------
 
     # --- TREND FILTER (Long Only) ---
-    # Only take trades where Price > SMA 200 (Uptrend) AND ADX > 15 (Trend exists)
-    # We use 'dist_sma_200' > 0 and 'adx' > 15
+    # Only take trades where Price > SMA200 (Uptrend) AND ADX > threshold (Trend exists)
+    # Use M15 SMA200 distance when available; fallback to M5.
     if config.enable_trend_filter:
-        if "dist_sma_200" in features.columns and "adx" in features.columns:
-            sma_idx = features.columns.get_loc("dist_sma_200")
+        sma_col = None
+        if "dist_sma_200_m15" in features.columns:
+            sma_col = "dist_sma_200_m15"
+        elif "dist_sma_200" in features.columns:
+            sma_col = "dist_sma_200"
+
+        if sma_col is not None and "adx" in features.columns:
+            sma_idx = features.columns.get_loc(sma_col)
             adx_idx = features.columns.get_loc("adx")
 
             dist_sma_values = features_array[timestamp_indices, sma_idx]
@@ -139,8 +145,9 @@ def create_sequences(
             total = len(trend_mask)
             ratio = kept / total if total else 0.0
             logger.info(
-                "Applied Trend Filter (dist_sma_200 > %s, ADX > %s): kept %s/%s (%.1f%%)"
+                "Applied Trend Filter (%s > %s, ADX > %s): kept %s/%s (%.1f%%)"
                 % (
+                    sma_col,
                     (
                         f"{config.trend_min_dist_sma200:.2f}"
                         if config.trend_min_dist_sma200 is not None
@@ -157,7 +164,7 @@ def create_sequences(
                 )
             )
         else:
-            logger.warning("dist_sma_200 or adx feature not found; skipping trend filter")
+            logger.warning("SMA200 distance (M15/M5) or ADX feature not found; skipping trend filter")
     else:
         logger.info("Trend filter disabled; not enforcing SMA/ADX conditions")
     

@@ -355,12 +355,14 @@ def predict(
 
     # --- TREND FILTER CHECK ---
     # Check if the latest candle is in an uptrend (Close > SMA200) AND ADX > 15 AND RSI_M5 < 75
-    if "dist_sma_200" in features.columns and "adx" in features.columns:
-        last_dist = features["dist_sma_200"].iloc[-1]
+    # Prefer M15 SMA200 distance if available; fallback to M5
+    sma_col = "dist_sma_200_m15" if "dist_sma_200_m15" in features.columns else "dist_sma_200"
+    if sma_col in features.columns and "adx" in features.columns:
+        last_dist = features[sma_col].iloc[-1]
         last_adx = features["adx"].iloc[-1]
         
         if last_dist <= 0:
-            logger.debug(f"Trend Filter: dist_sma_200={last_dist:.4f} (filtered)")
+            logger.debug(f"Trend Filter: {sma_col}={last_dist:.4f} (filtered)")
             return {
                 **common_result,
                 "probability": 0.0,
@@ -419,16 +421,20 @@ def predict(
     try:
         last_feat = features.iloc[-1]
         adx = float(last_feat.get("adx", np.nan))
-        dist_sma = float(last_feat.get("dist_sma_200", np.nan))
-        sma200 = entry_price - dist_sma if not pd.isna(dist_sma) else float("nan")
-
-        allowed, regime, reason = should_trade(
-            atr_m5 if atr_m5 is not None else 0.0,
-            adx,
-            entry_price,
-            sma200,
-            threshold=threshold_used,
-        )
+        # Prefer M15 distance when available
+        dist_sma = float(last_feat.get("dist_sma_200_m15", last_feat.get("dist_sma_200", np.nan)))
+        # Only apply full regime gating when absolute SMA200 level is available
+        if "sma_200" in features.columns:
+            sma200_level = float(last_feat.get("sma_200", np.nan))
+            allowed, regime, reason = should_trade(
+                atr_m5 if atr_m5 is not None else 0.0,
+                adx,
+                entry_price,
+                sma200_level,
+                threshold=threshold_used,
+            )
+        else:
+            allowed, regime, reason = True, "UNKNOWN", "no_sma200_feature"
     except Exception as e:
         logger.exception("Regime check failed; proceeding without regime gating")
         allowed, regime, reason = True, "UNKNOWN", "failed_check"

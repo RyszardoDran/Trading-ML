@@ -1,0 +1,354 @@
+2025-12-23 15:48:28 - ml.src.pipeline_config_extended - INFO - Pipeline configuration validated successfully
+2025-12-23 15:48:28 - __main__ - INFO - 
+================================================================================
+2025-12-23 15:48:28 - __main__ - INFO - SEQUENCE XGBoost TRAINING PIPELINE - XAU/USD 1-Minute Data
+2025-12-23 15:48:28 - __main__ - INFO - ================================================================================
+2025-12-23 15:48:28 - __main__ - INFO - Log file: c:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\ml\outputs\logs\sequence_xgb_train_years_2025_20251223_154828.log
+2025-12-23 15:48:28 - __main__ - INFO - Start time: 2025-12-23 15:48:28
+2025-12-23 15:48:28 - __main__ - INFO - Data years: [2025]
+2025-12-23 15:48:28 - __main__ - INFO - 
+Pipeline Configuration:
+2025-12-23 15:48:28 - __main__ - INFO -   Feature engineering version: v1
+2025-12-23 15:48:28 - __main__ - INFO -   Window size: 80 candles
+2025-12-23 15:48:28 - __main__ - INFO -   ATR SL multiplier: 1.0x (from risk_config.py)
+2025-12-23 15:48:28 - __main__ - INFO -   ATR TP multiplier: 2.0x (from risk_config.py)
+2025-12-23 15:48:28 - __main__ - INFO -   Min hold time: 3 M5 candles
+2025-12-23 15:48:28 - __main__ - INFO -   Max horizon: 60 M5 candles
+2025-12-23 15:48:28 - __main__ - INFO -   Trading session: london_ny
+2025-12-23 15:48:28 - __main__ - INFO -   Threshold optimization: HYBRID (EV with precision AND recall floors)
+2025-12-23 15:48:28 - __main__ - INFO -     - Min precision: 0.75
+2025-12-23 15:48:28 - __main__ - INFO -     - Min recall: 0.3
+2025-12-23 15:48:28 - __main__ - INFO -     - Win coefficient: 2.0
+2025-12-23 15:48:28 - __main__ - INFO -     - Loss coefficient: -1.0
+2025-12-23 15:48:28 - __main__ - INFO -   M5 alignment filter: disabled
+2025-12-23 15:48:28 - __main__ - INFO -   Trend filter: enabled
+2025-12-23 15:48:28 - __main__ - INFO -   Pullback filter: disabled
+2025-12-23 15:48:28 - __main__ - INFO -   Random state: 42
+2025-12-23 15:48:28 - __main__ - INFO - ================================================================================
+
+2025-12-23 15:48:28 - ml.src.pipeline_stages - INFO - Loading data from c:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\ml\src\data
+2025-12-23 15:48:28 - ml.src.data_loading.loaders - INFO - Year filter applied: loading only [2025]
+2025-12-23 15:48:29 - ml.src.pipeline_stages - INFO - Loaded 80,985 rows from c:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\ml\src\data
+2025-12-23 15:48:29 - ml.src.pipeline_stages - INFO - Date range: 2025-09-08 05:12:00 to 2025-11-28 19:43:00
+2025-12-23 15:48:29 - ml.src.pipeline_stages - WARNING - window_size parameter is deprecated and ignored (passed: 80)
+2025-12-23 15:48:29 - ml.src.pipeline_stages - WARNING - feature_version parameter is deprecated and ignored (passed: v1)
+2025-12-23 15:48:29 - ml.src.pipeline_stages - INFO - Aggregating M1 data to M5 timeframe...
+2025-12-23 15:48:29 - ml.src.features.engineer_m5 - INFO - Aggregating 80985 M1 candles to M5...
+2025-12-23 15:48:29 - ml.src.features.engineer_m5 - INFO - Aggregated to 16200 M5 candles (5.0x compression)
+2025-12-23 15:48:29 - ml.src.pipeline_stages - INFO - Aggregated 80,985 M1 candles → 16,200 M5 candles (20.0% compression)
+2025-12-23 15:48:29 - ml.src.pipeline_stages - INFO - Engineering technical features on M5 timeframe (with M15/M60 context)...
+2025-12-23 15:48:29 - ml.src.features.engineer_m5 - INFO - Engineering M5 features...
+2025-12-23 15:48:29 - ml.src.features.engineer_m5 - INFO - Aggregating 16200 M1 candles to M5...
+2025-12-23 15:48:29 - ml.src.features.engineer_m5 - INFO - Aggregated to 16200 M5 candles (1.0x compression)
+2025-12-23 15:48:29 - ml.src.features.engineer_m5 - INFO - Computing M5 primary features...
+2025-12-23 15:48:30 - ml.src.features.engineer_m5 - INFO - Computing M15 context from M5...
+2025-12-23 15:48:30 - ml.src.features.engineer_m5 - INFO - Computing M60 context from M5...
+2025-12-23 15:48:30 - ml.src.features.engineer_m5 - INFO - M5 feature engineering complete: 16200 rows × 26 features
+2025-12-23 15:48:30 - ml.src.features.engineer_m5 - INFO - Timeframe: M5 (5-minute candles)
+2025-12-23 15:48:30 - ml.src.features.engineer_m5 - INFO - Date range: 2025-09-08 05:10:00 to 2025-11-28 19:40:00
+2025-12-23 15:48:30 - ml.src.pipeline_stages - INFO - Features shape: (16200, 26)
+2025-12-23 15:48:30 - ml.src.pipeline_stages - INFO - Feature columns: 26
+2025-12-23 15:48:30 - ml.src.features.engineer_m5 - INFO - Aggregating 80982 M1 candles to M5...
+2025-12-23 15:48:30 - ml.src.features.engineer_m5 - INFO - Aggregated to 16200 M5 candles (5.0x compression)
+2025-12-23 15:48:30 - ml.src.pipeline_stages - INFO - Creating targets on M5 timeframe (SL=1.0×ATR, TP=2.0×ATR, min_hold=3 M5 candles, max_horizon=60 M5 candles)
+2025-12-23 15:48:30 - ml.src.targets.target_maker - INFO - Creating targets (SL/TP simulation) for 16,200 candles...
+2025-12-23 15:48:30 - ml.src.targets.target_maker - INFO - Parameters: SL=1.0×ATR, TP=2.0×ATR, min_hold=3min, max_horizon=60min
+2025-12-23 15:48:31 - ml.src.targets.target_maker - INFO - Calculating M1 ATR(14) for SL/TP targets (fallback)
+2025-12-23 15:48:31 - ml.src.targets.target_maker - INFO - Target creation complete: 16,140 valid targets
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Targets shape: 16140
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Positive class (win): 6,074 (37.63%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Negative class (loss): 10,066 (62.37%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Creating sequences on M5 timeframe (window_size=80 M5 candles = 400 minutes)...
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Filter config: m5_alignment=False (already M5), trend=True, pullback=False, max_windows=200,000
+2025-12-23 15:48:31 - ml.src.sequences.sequencer - INFO - M5 alignment filter disabled; keeping all timestamps irrespective of minute alignment
+2025-12-23 15:48:31 - ml.src.sequences.sequencer - INFO - Applied Trend Filter (dist_sma_200_m15 > 0.00, ADX > 15.00): kept 9741/16061 (60.7%)
+2025-12-23 15:48:31 - ml.src.sequences.sequencer - INFO - Pullback filter disabled; not constraining RSI_M5
+2025-12-23 15:48:31 - ml.src.sequences.sequencer - INFO - Session filter 'london_ny': keeping 5,821 / 16,061 windows (36.2%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Sequences created: X.shape=(5821, 2080), y.shape=(5821,)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Positive class in sequences: 2,147 (36.88%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Using Time Series Cross-Validation with 5 folds
+2025-12-23 15:48:31 - ml.src.utils.timeseries_validation - INFO - Fold 1/5: train=971 samples, test=970 samples
+2025-12-23 15:48:31 - ml.src.utils.timeseries_validation - INFO - ✅ Temporal validation passed: train until 2025-09-22 13:00:00, test from 2025-09-22 13:05:00
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Fold 0: Class distribution check
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Class distribution validation:
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   TRAIN: pos=342 (35.2%), neg=629 (64.8%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   VAL: pos=147 (30.3%), neg=338 (69.7%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   TEST: pos=204 (42.1%), neg=281 (57.9%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   Max difference in positive class: 11.8% (tolerance: 10.0%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - WARNING - ⚠️  Class distributions differ significantly (max diff: 11.8% > 10.0%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - WARNING -    This may indicate market regime changes or data quality issues
+2025-12-23 15:48:31 - ml.src.pipeline_stages - WARNING -    Model performance may be unstable across time periods
+2025-12-23 15:48:31 - ml.src.utils.timeseries_validation - INFO - Fold 2/5: train=1941 samples, test=970 samples
+2025-12-23 15:48:31 - ml.src.utils.timeseries_validation - INFO - ✅ Temporal validation passed: train until 2025-10-03 12:25:00, test from 2025-10-03 12:30:00
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Fold 1: Class distribution check
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO - Class distribution validation:
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   TRAIN: pos=693 (35.7%), neg=1,248 (64.3%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   VAL: pos=208 (42.9%), neg=277 (57.1%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   TEST: pos=189 (39.0%), neg=296 (61.0%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   Max difference in positive class: 7.2% (tolerance: 10.0%)
+2025-12-23 15:48:31 - ml.src.pipeline_stages - INFO -   ✅ Class distributions are stable (max diff: 7.2% < 10.0%)
+2025-12-23 15:48:32 - ml.src.utils.timeseries_validation - INFO - Fold 3/5: train=2911 samples, test=970 samples
+2025-12-23 15:48:32 - ml.src.utils.timeseries_validation - INFO - ✅ Temporal validation passed: train until 2025-10-15 17:20:00, test from 2025-10-15 17:25:00
+2025-12-23 15:48:32 - ml.src.pipeline_stages - INFO - Fold 2: Class distribution check
+2025-12-23 15:48:32 - ml.src.pipeline_stages - INFO - Class distribution validation:
+2025-12-23 15:48:32 - ml.src.pipeline_stages - INFO -   TRAIN: pos=1,090 (37.4%), neg=1,821 (62.6%)
+2025-12-23 15:48:32 - ml.src.pipeline_stages - INFO -   VAL: pos=187 (38.6%), neg=298 (61.4%)
+2025-12-23 15:48:32 - ml.src.pipeline_stages - INFO -   TEST: pos=160 (33.0%), neg=325 (67.0%)
+2025-12-23 15:48:32 - ml.src.pipeline_stages - INFO -   Max difference in positive class: 5.6% (tolerance: 10.0%)
+2025-12-23 15:48:32 - ml.src.pipeline_stages - INFO -   ✅ Class distributions are stable (max diff: 5.6% < 10.0%)
+2025-12-23 15:48:33 - ml.src.utils.timeseries_validation - INFO - Fold 4/5: train=3881 samples, test=970 samples
+2025-12-23 15:48:33 - ml.src.utils.timeseries_validation - INFO - ✅ Temporal validation passed: train until 2025-11-03 15:20:00, test from 2025-11-03 15:25:00
+2025-12-23 15:48:33 - ml.src.pipeline_stages - INFO - Fold 3: Class distribution check
+2025-12-23 15:48:33 - ml.src.pipeline_stages - INFO - Class distribution validation:
+2025-12-23 15:48:33 - ml.src.pipeline_stages - INFO -   TRAIN: pos=1,437 (37.0%), neg=2,444 (63.0%)
+2025-12-23 15:48:33 - ml.src.pipeline_stages - INFO -   VAL: pos=146 (30.1%), neg=339 (69.9%)
+2025-12-23 15:48:33 - ml.src.pipeline_stages - INFO -   TEST: pos=186 (38.4%), neg=299 (61.6%)
+2025-12-23 15:48:33 - ml.src.pipeline_stages - INFO -   Max difference in positive class: 8.2% (tolerance: 10.0%)
+2025-12-23 15:48:33 - ml.src.pipeline_stages - INFO -   ✅ Class distributions are stable (max diff: 8.2% < 10.0%)
+2025-12-23 15:48:35 - ml.src.utils.timeseries_validation - INFO - Fold 5/5: train=4851 samples, test=970 samples
+2025-12-23 15:48:35 - ml.src.utils.timeseries_validation - INFO - ✅ Temporal validation passed: train until 2025-11-18 16:55:00, test from 2025-11-18 17:00:00
+2025-12-23 15:48:35 - ml.src.pipeline_stages - INFO - Fold 4: Class distribution check
+2025-12-23 15:48:35 - ml.src.pipeline_stages - INFO - Class distribution validation:
+2025-12-23 15:48:35 - ml.src.pipeline_stages - INFO -   TRAIN: pos=1,769 (36.5%), neg=3,082 (63.5%)
+2025-12-23 15:48:35 - ml.src.pipeline_stages - INFO -   VAL: pos=195 (40.2%), neg=290 (59.8%)
+2025-12-23 15:48:35 - ml.src.pipeline_stages - INFO -   TEST: pos=183 (37.7%), neg=302 (62.3%)
+2025-12-23 15:48:35 - ml.src.pipeline_stages - INFO -   Max difference in positive class: 3.7% (tolerance: 10.0%)
+2025-12-23 15:48:35 - ml.src.pipeline_stages - INFO -   ✅ Class distributions are stable (max diff: 3.7% < 10.0%)
+2025-12-23 15:48:36 - __main__ - INFO - 
+============================================================
+2025-12-23 15:48:36 - __main__ - INFO - FOLD 1 / 5
+2025-12-23 15:48:36 - __main__ - INFO - ============================================================
+2025-12-23 15:48:36 - ml.src.pipeline_stages - INFO - Training XGBoost model...
+2025-12-23 15:48:36 - ml.src.pipeline_stages - INFO - 
+[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...
+2025-12-23 15:48:36 - ml.src.pipeline_stages - INFO -   Sample weights: positive=3.0, negative=1.0
+2025-12-23 15:48:36 - ml.src.pipeline_stages - INFO -   Weight ratio (positive/negative): 3.00x
+2025-12-23 15:48:36 - ml.src.training.sequence_xgb_trainer - INFO - Class balance (train): pos=342, neg=629, imbalance_ratio=1.84
+2025-12-23 15:48:36 - ml.src.training.sequence_xgb_trainer - INFO - [POINT 1] Cost-Sensitive Learning: using sample weights (mean=1.7044); disabling scale_pos_weight (set to 1.0)
+2025-12-23 15:48:36 - ml.src.training.sequence_xgb_trainer - INFO - Training XGBoost classifier...
+2025-12-23 15:49:19 - ml.src.training.sequence_xgb_trainer - INFO - Training completed
+2025-12-23 15:49:19 - ml.src.pipeline_stages - INFO - Model training complete
+2025-12-23 15:49:19 - ml.src.pipeline_stages - INFO - Optimizing decision threshold on VAL set...
+2025-12-23 15:49:19 - ml.src.training.sequence_evaluation - INFO - Running threshold optimization on VAL set...
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO - 
+Top 5 thresholds on VAL set:
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   T=0.54: Precision=0.8730, Recall=0.3741, F1=0.5238, Score=1.8730
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   T=0.54: Precision=0.8730, Recall=0.3741, F1=0.5238, Score=1.8730
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   T=0.54: Precision=0.8730, Recall=0.3741, F1=0.5238, Score=1.8730
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   T=0.55: Precision=0.8730, Recall=0.3741, F1=0.5238, Score=1.8730
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   T=0.55: Precision=0.8730, Recall=0.3741, F1=0.5238, Score=1.8730
+2025-12-23 15:49:23 - ml.src.pipeline_stages - INFO - Optimal threshold: 0.5361 (Score=1.8730 on VAL)
+2025-12-23 15:49:23 - ml.src.pipeline_stages - INFO - Evaluating on TEST set with optimized threshold...
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO - Probability stats: min=0.0076, max=0.9719, mean=0.3466, std=0.2562
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO - Using fixed threshold: 0.5361
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO - Confusion matrix@thr=0.5361:
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   [[TN=265, FP=16],
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -    [FN=154, TP=50]]
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO - 
+TEST SET EVALUATION:
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   Precision: 0.7576
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   Recall:    0.2451
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   F1:        0.3704
+2025-12-23 15:49:23 - ml.src.training.sequence_evaluation - INFO -   ROC-AUC:   0.7156
+2025-12-23 15:49:23 - ml.src.pipeline_stages - INFO - Final TEST metrics: threshold=0.5361, win_rate=0.7576 (75.76%), precision=0.7576, recall=0.2451, f1=0.3704, roc_auc=0.7156, pr_auc=0.6854
+2025-12-23 15:49:23 - ml.src.utils.timeseries_validation - INFO - Fold 1: Precision=0.6967, Recall=0.4167, F1=0.5215
+2025-12-23 15:49:23 - __main__ - INFO - 
+============================================================
+2025-12-23 15:49:23 - __main__ - INFO - FOLD 2 / 5
+2025-12-23 15:49:23 - __main__ - INFO - ============================================================
+2025-12-23 15:49:23 - ml.src.pipeline_stages - INFO - Training XGBoost model...
+2025-12-23 15:49:23 - ml.src.pipeline_stages - INFO - 
+[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...
+2025-12-23 15:49:23 - ml.src.pipeline_stages - INFO -   Sample weights: positive=3.0, negative=1.0
+2025-12-23 15:49:23 - ml.src.pipeline_stages - INFO -   Weight ratio (positive/negative): 3.00x
+2025-12-23 15:49:23 - ml.src.training.sequence_xgb_trainer - INFO - Class balance (train): pos=693, neg=1,248, imbalance_ratio=1.80
+2025-12-23 15:49:23 - ml.src.training.sequence_xgb_trainer - INFO - [POINT 1] Cost-Sensitive Learning: using sample weights (mean=1.7141); disabling scale_pos_weight (set to 1.0)
+2025-12-23 15:49:23 - ml.src.training.sequence_xgb_trainer - INFO - Training XGBoost classifier...
+2025-12-23 15:50:14 - ml.src.training.sequence_xgb_trainer - INFO - Training completed
+2025-12-23 15:50:14 - ml.src.pipeline_stages - INFO - Model training complete
+2025-12-23 15:50:14 - ml.src.pipeline_stages - INFO - Optimizing decision threshold on VAL set...
+2025-12-23 15:50:14 - ml.src.training.sequence_evaluation - INFO - Running threshold optimization on VAL set...
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO - 
+Top 5 thresholds on VAL set:
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   T=0.00: Precision=0.9000, Recall=0.2596, F1=0.4030, Score=-inf
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   T=0.01: Precision=0.9000, Recall=0.2596, F1=0.4030, Score=-inf
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   T=0.02: Precision=0.9000, Recall=0.2596, F1=0.4030, Score=-inf
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   T=0.02: Precision=0.9000, Recall=0.2596, F1=0.4030, Score=-inf
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   T=0.02: Precision=0.9000, Recall=0.2596, F1=0.4030, Score=-inf
+2025-12-23 15:50:17 - ml.src.pipeline_stages - INFO - Optimal threshold: 0.5000 (Score=-inf on VAL)
+2025-12-23 15:50:17 - ml.src.pipeline_stages - INFO - Evaluating on TEST set with optimized threshold...
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO - Probability stats: min=0.0140, max=0.9707, mean=0.4218, std=0.2627
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO - Using fixed threshold: 0.5000
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO - Confusion matrix@thr=0.5000:
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   [[TN=281, FP=15],
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -    [FN=129, TP=60]]
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO - 
+TEST SET EVALUATION:
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   Precision: 0.8000
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   Recall:    0.3175
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   F1:        0.4545
+2025-12-23 15:50:17 - ml.src.training.sequence_evaluation - INFO -   ROC-AUC:   0.7555
+2025-12-23 15:50:17 - ml.src.pipeline_stages - INFO - Final TEST metrics: threshold=0.5000, win_rate=0.8000 (80.00%), precision=0.8000, recall=0.3175, f1=0.4545, roc_auc=0.7555, pr_auc=0.6967
+2025-12-23 15:50:17 - ml.src.utils.timeseries_validation - INFO - Fold 2: Precision=0.6022, Recall=0.5926, F1=0.5973
+2025-12-23 15:50:17 - __main__ - INFO - 
+============================================================
+2025-12-23 15:50:17 - __main__ - INFO - FOLD 3 / 5
+2025-12-23 15:50:17 - __main__ - INFO - ============================================================
+2025-12-23 15:50:17 - ml.src.pipeline_stages - INFO - Training XGBoost model...
+2025-12-23 15:50:17 - ml.src.pipeline_stages - INFO - 
+[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...
+2025-12-23 15:50:17 - ml.src.pipeline_stages - INFO -   Sample weights: positive=3.0, negative=1.0
+2025-12-23 15:50:17 - ml.src.pipeline_stages - INFO -   Weight ratio (positive/negative): 3.00x
+2025-12-23 15:50:17 - ml.src.training.sequence_xgb_trainer - INFO - Class balance (train): pos=1,090, neg=1,821, imbalance_ratio=1.67
+2025-12-23 15:50:17 - ml.src.training.sequence_xgb_trainer - INFO - [POINT 1] Cost-Sensitive Learning: using sample weights (mean=1.7489); disabling scale_pos_weight (set to 1.0)
+2025-12-23 15:50:17 - ml.src.training.sequence_xgb_trainer - INFO - Training XGBoost classifier...
+2025-12-23 15:51:09 - ml.src.training.sequence_xgb_trainer - INFO - Training completed
+2025-12-23 15:51:09 - ml.src.pipeline_stages - INFO - Model training complete
+2025-12-23 15:51:09 - ml.src.pipeline_stages - INFO - Optimizing decision threshold on VAL set...
+2025-12-23 15:51:09 - ml.src.training.sequence_evaluation - INFO - Running threshold optimization on VAL set...
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO - 
+Top 5 thresholds on VAL set:
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   T=0.59: Precision=0.7600, Recall=0.3048, F1=0.4351, Score=1.7600
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   T=0.58: Precision=0.7500, Recall=0.3048, F1=0.4335, Score=1.7500
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   T=0.09: Precision=0.7111, Recall=0.3422, F1=0.4621, Score=-inf
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   T=0.00: Precision=0.7111, Recall=0.3422, F1=0.4621, Score=-inf
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   T=0.88: Precision=0.8846, Recall=0.1230, F1=0.2160, Score=-inf
+2025-12-23 15:51:12 - ml.src.pipeline_stages - INFO - Optimal threshold: 0.5862 (Score=1.7600 on VAL)
+2025-12-23 15:51:12 - ml.src.pipeline_stages - INFO - Evaluating on TEST set with optimized threshold...
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO - Probability stats: min=0.0353, max=0.9414, mean=0.4435, std=0.2411
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO - Using fixed threshold: 0.5862
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO - Confusion matrix@thr=0.5862:
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   [[TN=302, FP=23],
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -    [FN=120, TP=40]]
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO - 
+TEST SET EVALUATION:
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   Precision: 0.6349
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   Recall:    0.2500
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   F1:        0.3587
+2025-12-23 15:51:12 - ml.src.training.sequence_evaluation - INFO -   ROC-AUC:   0.7955
+2025-12-23 15:51:12 - ml.src.pipeline_stages - INFO - Final TEST metrics: threshold=0.5862, win_rate=0.6349 (63.49%), precision=0.6349, recall=0.2500, f1=0.3587, roc_auc=0.7955, pr_auc=0.6578
+2025-12-23 15:51:12 - ml.src.utils.timeseries_validation - INFO - Fold 3: Precision=0.6115, Recall=0.6000, F1=0.6057
+2025-12-23 15:51:12 - __main__ - INFO - 
+============================================================
+2025-12-23 15:51:12 - __main__ - INFO - FOLD 4 / 5
+2025-12-23 15:51:12 - __main__ - INFO - ============================================================
+2025-12-23 15:51:12 - ml.src.pipeline_stages - INFO - Training XGBoost model...
+2025-12-23 15:51:12 - ml.src.pipeline_stages - INFO - 
+[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...
+2025-12-23 15:51:12 - ml.src.pipeline_stages - INFO -   Sample weights: positive=3.0, negative=1.0
+2025-12-23 15:51:12 - ml.src.pipeline_stages - INFO -   Weight ratio (positive/negative): 3.00x
+2025-12-23 15:51:12 - ml.src.training.sequence_xgb_trainer - INFO - Class balance (train): pos=1,437, neg=2,444, imbalance_ratio=1.70
+2025-12-23 15:51:12 - ml.src.training.sequence_xgb_trainer - INFO - [POINT 1] Cost-Sensitive Learning: using sample weights (mean=1.7405); disabling scale_pos_weight (set to 1.0)
+2025-12-23 15:51:12 - ml.src.training.sequence_xgb_trainer - INFO - Training XGBoost classifier...
+2025-12-23 15:52:34 - ml.src.training.sequence_xgb_trainer - INFO - Training completed
+2025-12-23 15:52:34 - ml.src.pipeline_stages - INFO - Model training complete
+2025-12-23 15:52:34 - ml.src.pipeline_stages - INFO - Optimizing decision threshold on VAL set...
+2025-12-23 15:52:34 - ml.src.training.sequence_evaluation - INFO - Running threshold optimization on VAL set...
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO - 
+Top 5 thresholds on VAL set:
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   T=0.76: Precision=0.8750, Recall=0.3356, F1=0.4851, Score=1.8750
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   T=0.76: Precision=0.8727, Recall=0.3288, F1=0.4776, Score=1.8727
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   T=0.76: Precision=0.8704, Recall=0.3219, F1=0.4700, Score=1.8704
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   T=0.77: Precision=0.8679, Recall=0.3151, F1=0.4623, Score=1.8679
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   T=0.77: Precision=0.8654, Recall=0.3082, F1=0.4545, Score=1.8654
+2025-12-23 15:52:37 - ml.src.pipeline_stages - INFO - Optimal threshold: 0.7551 (Score=1.8750 on VAL)
+2025-12-23 15:52:37 - ml.src.pipeline_stages - INFO - Evaluating on TEST set with optimized threshold...
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO - Probability stats: min=0.0110, max=0.9883, mean=0.3488, std=0.2594
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO - Using fixed threshold: 0.7551
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO - Confusion matrix@thr=0.7551:
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   [[TN=296, FP=3],
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -    [FN=156, TP=30]]
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO - 
+TEST SET EVALUATION:
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   Precision: 0.9091
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   Recall:    0.1613
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   F1:        0.2740
+2025-12-23 15:52:37 - ml.src.training.sequence_evaluation - INFO -   ROC-AUC:   0.7896
+2025-12-23 15:52:37 - ml.src.pipeline_stages - INFO - Final TEST metrics: threshold=0.7551, win_rate=0.9091 (90.91%), precision=0.9091, recall=0.1613, f1=0.2740, roc_auc=0.7896, pr_auc=0.7043
+2025-12-23 15:52:37 - ml.src.utils.timeseries_validation - INFO - Fold 4: Precision=0.8511, Recall=0.2151, F1=0.3433
+2025-12-23 15:52:37 - __main__ - INFO - 
+============================================================
+2025-12-23 15:52:37 - __main__ - INFO - FOLD 5 / 5
+2025-12-23 15:52:37 - __main__ - INFO - ============================================================
+2025-12-23 15:52:37 - ml.src.pipeline_stages - INFO - Training XGBoost model...
+2025-12-23 15:52:37 - ml.src.pipeline_stages - INFO - 
+[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...
+2025-12-23 15:52:37 - ml.src.pipeline_stages - INFO -   Sample weights: positive=3.0, negative=1.0
+2025-12-23 15:52:37 - ml.src.pipeline_stages - INFO -   Weight ratio (positive/negative): 3.00x
+2025-12-23 15:52:37 - ml.src.training.sequence_xgb_trainer - INFO - Class balance (train): pos=1,769, neg=3,082, imbalance_ratio=1.74
+2025-12-23 15:52:37 - ml.src.training.sequence_xgb_trainer - INFO - [POINT 1] Cost-Sensitive Learning: using sample weights (mean=1.7293); disabling scale_pos_weight (set to 1.0)
+2025-12-23 15:52:37 - ml.src.training.sequence_xgb_trainer - INFO - Training XGBoost classifier...
+2025-12-23 15:55:06 - ml.src.training.sequence_xgb_trainer - INFO - Training completed
+2025-12-23 15:55:06 - ml.src.pipeline_stages - INFO - Model training complete
+2025-12-23 15:55:06 - ml.src.pipeline_stages - INFO - Optimizing decision threshold on VAL set...
+2025-12-23 15:55:06 - ml.src.training.sequence_evaluation - INFO - Running threshold optimization on VAL set...
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO - 
+Top 5 thresholds on VAL set:
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   T=0.55: Precision=0.9219, Recall=0.3026, F1=0.4556, Score=1.9219
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   T=0.53: Precision=0.9091, Recall=0.3077, F1=0.4598, Score=1.9091
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   T=0.53: Precision=0.9091, Recall=0.3077, F1=0.4598, Score=1.9091
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   T=0.52: Precision=0.9091, Recall=0.3077, F1=0.4598, Score=1.9091
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   T=0.53: Precision=0.9091, Recall=0.3077, F1=0.4598, Score=1.9091
+2025-12-23 15:55:09 - ml.src.pipeline_stages - INFO - Optimal threshold: 0.5526 (Score=1.9219 on VAL)
+2025-12-23 15:55:09 - ml.src.pipeline_stages - INFO - Evaluating on TEST set with optimized threshold...
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO - Probability stats: min=0.0032, max=0.9887, mean=0.3569, std=0.3030
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO - Using fixed threshold: 0.5526
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO - Confusion matrix@thr=0.5526:
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   [[TN=296, FP=6],
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -    [FN=129, TP=54]]
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO - 
+TEST SET EVALUATION:
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   Precision: 0.9000
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   Recall:    0.2951
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   F1:        0.4444
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO -   ROC-AUC:   0.8479
+2025-12-23 15:55:09 - ml.src.pipeline_stages - INFO - Final TEST metrics: threshold=0.5526, win_rate=0.9000 (90.00%), precision=0.9000, recall=0.2951, f1=0.4444, roc_auc=0.8479, pr_auc=0.7979
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - Fold 5: Precision=0.7746, Recall=0.6011, F1=0.6769
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - 
+============================================================
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - TIME SERIES CV - AGGREGATED METRICS
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - ============================================================
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - precision_mean: 0.7072
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - precision_std: 0.1067
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - recall_mean: 0.4851
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - recall_std: 0.1702
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - f1_mean: 0.5490
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - f1_std: 0.1274
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - n_positives_mean: 130.8000
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - n_positives_std: 52.3421
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - n_positives_true_mean: 184.4000
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - n_positives_true_std: 15.8524
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - roc_auc_mean: 0.7808
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - roc_auc_std: 0.0492
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - pr_auc_mean: 0.7074
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - pr_auc_std: 0.0533
+2025-12-23 15:55:09 - ml.src.utils.timeseries_validation - INFO - ============================================================
+2025-12-23 15:55:09 - ml.src.training.sequence_evaluation - INFO - Running threshold optimization on VAL set...
+2025-12-23 15:55:12 - ml.src.training.sequence_evaluation - INFO - 
+Top 5 thresholds on VAL set:
+2025-12-23 15:55:12 - ml.src.training.sequence_evaluation - INFO -   T=0.79: Precision=0.8537, Recall=0.3171, F1=0.4624, Score=1.8537
+2025-12-23 15:55:12 - ml.src.training.sequence_evaluation - INFO -   T=0.80: Precision=0.8513, Recall=0.3046, F1=0.4487, Score=1.8513
+2025-12-23 15:55:12 - ml.src.training.sequence_evaluation - INFO -   T=0.80: Precision=0.8509, Recall=0.3103, F1=0.4548, Score=1.8509
+2025-12-23 15:55:12 - ml.src.training.sequence_evaluation - INFO -   T=0.79: Precision=0.8503, Recall=0.3216, F1=0.4667, Score=1.8503
+2025-12-23 15:55:12 - ml.src.training.sequence_evaluation - INFO -   T=0.78: Precision=0.8471, Recall=0.3262, F1=0.4710, Score=1.8471
+2025-12-23 15:55:12 - __main__ - INFO - CV pooled threshold selected: 0.7909 (score=1.8537)
+2025-12-23 15:55:12 - __main__ - INFO - CV mode: Skipping model artifacts save (multiple models per fold)
+2025-12-23 15:55:12 - __main__ - INFO - CV Results: precision=0.707±0.107, recall=0.485±0.170
+2025-12-23 15:55:12 - __main__ - INFO - 
+================================================================================
+2025-12-23 15:55:12 - __main__ - INFO - TRAINING COMPLETE - SUMMARY
+2025-12-23 15:55:12 - __main__ - INFO - ================================================================================
+2025-12-23 15:55:12 - __main__ - INFO - End time: 2025-12-23 15:55:12
+2025-12-23 15:55:12 - __main__ - INFO - 
+Final Metrics:
+2025-12-23 15:55:12 - __main__ - INFO -   Window Size:       80 candles
+2025-12-23 15:55:12 - __main__ - INFO -   Threshold:         0.7909
+2025-12-23 15:55:12 - __main__ - INFO -   WIN RATE:          0.7072 ± 0.1067 (70.72%)
+2025-12-23 15:55:12 - __main__ - INFO -   Precision:         0.7072 ± 0.1067
+2025-12-23 15:55:12 - __main__ - INFO -   Recall:            0.4851 ± 0.1702
+2025-12-23 15:55:12 - __main__ - INFO -   F1 Score:          0.5490 ± 0.1274
+2025-12-23 15:55:12 - __main__ - INFO -   ROC-AUC:           0.7808 ± 0.0492
+2025-12-23 15:55:12 - __main__ - INFO -   PR-AUC:            0.7074 ± 0.0533
+2025-12-23 15:55:12 - __main__ - INFO - 
+Artifacts saved to: c:\Users\anajdere\source\repos\Tst IDT\ML\Trading-ML\ml\outputs\models
+2025-12-23 15:55:12 - __main__ - INFO - ================================================================================
