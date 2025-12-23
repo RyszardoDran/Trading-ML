@@ -46,7 +46,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 # Add parent directories to path for imports
 _script_dir = Path(__file__).parent
@@ -100,6 +100,10 @@ def _setup_logging(config: PipelineConfig, year_filter: Optional[list[int]] = No
     # Configure root logger with both file and console handlers
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
+    # Prevent duplicate handlers across repeated runs
+    if root_logger.handlers:
+        for h in root_logger.handlers[:]:
+            root_logger.removeHandler(h)
     
     # File handler (detailed logging)
     file_handler = logging.FileHandler(log_filepath, mode='w', encoding='utf-8')
@@ -125,7 +129,7 @@ def _setup_logging(config: PipelineConfig, year_filter: Optional[list[int]] = No
 
 
 
-def run_pipeline(params: PipelineParams) -> Dict[str, float]:
+def run_pipeline(params: PipelineParams) -> Dict[str, Any]:
     """Execute end-to-end sequence XGBoost training pipeline.
 
     **PURPOSE**: Orchestrate complete training pipeline from data loading
@@ -236,9 +240,11 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         X=X,
         y=y,
         timestamps=timestamps,
+        window_size=params.window_size,
         year_filter=params.year_filter,
         use_timeseries_cv=params.use_timeseries_cv,
         cv_folds=params.cv_folds,
+        drop_boundary_crossing_sequences=True,
     )
     
     if params.use_timeseries_cv:
@@ -247,6 +253,10 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         
         validator = TimeSeriesValidator(n_splits=params.cv_folds)
         all_metrics = []
+        thresholds: list[float] = []
+        val_sizes: list[int] = []
+        pooled_val_true: list[np.ndarray] = []
+        pooled_val_pred: list[np.ndarray] = []
         last_model = None  # Store last fold's model for artifact saving
         
         for fold_data in split_result:
@@ -297,34 +307,45 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
             )
             
             all_metrics.append(metrics)
+            thresholds.append(metrics['threshold'])
+            val_sizes.append(len(y_val))
+            pooled_val_true.append(y_val)
+            pooled_val_pred.append(model.predict_proba(X_val_scaled)[:, 1])
         
-        # ===== STAGE 7: Aggregate CV results =====
+        # ===== STAGE 7: Aggregate CV results & pooled threshold optimization =====
         final_metrics = validator.aggregate_metrics()
-        final_metrics['threshold'] = np.mean([m['threshold'] for m in all_metrics])  # Average threshold
+        # Pooled validation predictions across folds for robust global threshold
+        try:
+            from ml.src.training import optimize_threshold_on_val
+            y_val_pooled = np.concatenate(pooled_val_true) if pooled_val_true else None
+            y_pred_pooled = np.concatenate(pooled_val_pred) if pooled_val_pred else None
+            if y_val_pooled is not None and y_pred_pooled is not None and len(y_val_pooled) == len(y_pred_pooled):
+                best_thr, best_score = optimize_threshold_on_val(
+                    y_true=y_val_pooled,
+                    y_pred_proba=y_pred_pooled,
+                    min_precision=params.min_precision,
+                    min_recall=params.min_recall,
+                    use_ev_optimization=params.use_ev_optimization,
+                    use_hybrid_optimization=params.use_hybrid_optimization,
+                    ev_win_coefficient=params.ev_win_coefficient,
+                    ev_loss_coefficient=params.ev_loss_coefficient,
+                    min_trades=params.min_trades,
+                    timestamps=None,
+                    max_trades_per_day=params.max_trades_per_day,
+                )
+                final_metrics['threshold'] = float(best_thr)
+                logger.info(f"CV pooled threshold selected: {best_thr:.4f} (score={best_score:.4f})")
+            else:
+                raise RuntimeError("Pooled validation data unavailable")
+        except Exception as _:
+            # Fallback to weighted average of per-fold thresholds
+            if len(thresholds) > 0:
+                weights = np.array(val_sizes, dtype=float)
+                weights = weights / weights.sum()
+                final_metrics['threshold'] = float(np.sum(weights * np.array(thresholds)))
+                logger.info("Fallback: using weighted average of fold thresholds")
         
-        # Use last fold's model and scaler for saving artifacts
-        last_fold_data = split_result[-1]
-        model = last_model  # Use the stored last model
-        scaler = last_fold_data['scaler']
-        
-        # Save artifacts for CV mode
-        threshold_strategy = (
-            "hybrid" if params.use_hybrid_optimization else "ev" if params.use_ev_optimization else "f1"
-        )
-        save_model_artifacts(
-            model=model,
-            scaler=scaler,
-            feature_columns=list(features.columns),
-            models_dir=models_dir,
-            threshold=final_metrics["threshold"],
-            win_rate=final_metrics["precision_mean"],  # Use precision_mean as win_rate for CV
-            window_size=params.window_size,
-            analysis_window_days=7,  # Recommend 7 days for robust indicator calculation
-            max_trades_per_day=params.max_trades_per_day,
-            min_precision=params.min_precision,
-            min_recall=params.min_recall,
-            threshold_strategy=threshold_strategy,
-        )
+        # In CV mode, do not save a single model/scaler; report aggregated metrics only
         
     else:
         # ===== STAGE 6: Train and evaluate (single split mode) =====

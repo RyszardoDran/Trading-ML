@@ -48,12 +48,17 @@ def train_xgb(
 
     pos = int(y_train.sum())
     neg = int((y_train == 0).sum())
-    scale_pos_weight = neg / max(pos, 1) if pos > 0 else 1.0
+    base_ratio = neg / max(pos, 1) if pos > 0 else 1.0
     logger.info(f"Class balance (train): pos={pos:,}, neg={neg:,}, imbalance_ratio={neg/max(pos,1):.2f}")
-    logger.info(f"Applied scale_pos_weight={scale_pos_weight:.4f} to handle class imbalance")
-    
+
+    # Avoid double-counting imbalance: if sample_weight is provided, disable scale_pos_weight
     if sample_weight is not None:
-        logger.info(f"[POINT 1] Cost-Sensitive Learning: using sample weights (mean={sample_weight.mean():.4f})")
+        scale_pos_weight = 1.0
+        logger.info(f"[POINT 1] Cost-Sensitive Learning: using sample weights (mean={sample_weight.mean():.4f}); "
+                    f"disabling scale_pos_weight (set to 1.0)")
+    else:
+        scale_pos_weight = base_ratio
+        logger.info(f"Applied scale_pos_weight={scale_pos_weight:.4f} to handle class imbalance")
 
     base = XGBClassifier(
         n_estimators=n_estimators,

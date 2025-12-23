@@ -128,14 +128,10 @@ def make_target(
     sl_any = hit_sl.max(axis=1)
     
     # Determine target
-    # TP wins if:
-    # 1. TP was hit (tp_any is True)
-    # 2. AND (SL was NOT hit OR TP was hit before or at same time as SL)
-    # Note: If tp_idx == sl_idx, it means both hit in same candle. 
-    # We assume TP takes precedence (optimistic) or check High/Low logic.
-    # Original code checked TP first in loop, so TP precedence.
-    
-    tp_wins = tp_any & (~sl_any | (tp_idx <= sl_idx))
+    # Conservative tie-breaking: TP must occur strictly before SL.
+    # If both TP and SL hit in the same candle (tp_idx == sl_idx), count as loss.
+    # This reduces optimistic bias from bar-level ambiguity.
+    tp_wins = tp_any & (~sl_any | (tp_idx < sl_idx))
     
     # Initialize target array
     target = np.zeros(n_samples, dtype=np.float32)

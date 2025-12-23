@@ -24,8 +24,8 @@ USE_HYBRID_OPTIMIZATION: bool = True  # Hybryda: EV-optimized ale z precision AN
 # forces threshold selection into fallbacks. We default to no recall floor and
 # let the daily cap control trade frequency.
 MIN_RECALL_FLOOR: float = 0.0
-EV_WIN_COEFFICIENT: float = 1.0       # Mnożnik dla True Positives (wygrane transakcje)
-EV_LOSS_COEFFICIENT: float = -1.0     # Mnożnik dla False Positives (przegrane transakcje)
+EV_WIN_COEFFICIENT: float = 2.0       # Odzwierciedla RR 2:1 (TP=2×SL)
+EV_LOSS_COEFFICIENT: float = -1.0     # Strata jednostkowa vs zysk x2
 
 # ===== Cost-Sensitive Learning (POINT 1) =====
 USE_COST_SENSITIVE_LEARNING: bool = True  # Waży błędy: False Positives bardziej "kosztowne" niż False Negatives

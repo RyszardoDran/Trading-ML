@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Optional
+from ml.src.utils.risk_config import SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER, risk_reward_ratio
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +204,32 @@ class PipelineParams:
                 f"atr_multiplier_tp ({self.atr_multiplier_tp}) must be > "
                 f"atr_multiplier_sl ({self.atr_multiplier_sl}) for positive RR"
             )
+
+        # Enforce canonical ATR multipliers to prevent data snooping
+        if (self.atr_multiplier_sl != SL_ATR_MULTIPLIER) or (self.atr_multiplier_tp != TP_ATR_MULTIPLIER):
+            logger.warning(
+                (
+                    "Overriding ATR multipliers to canonical values: "
+                    f"SL={SL_ATR_MULTIPLIER}, TP={TP_ATR_MULTIPLIER} (risk_config.py). "
+                    "CLI-provided values are ignored to maintain fixed strategy."
+                )
+            )
+            self.atr_multiplier_sl = SL_ATR_MULTIPLIER
+            self.atr_multiplier_tp = TP_ATR_MULTIPLIER
+
+        # Align EV optimization payoffs with strategy RR (TP:SL)
+        # If EV/hybrid is enabled, enforce win/loss coefficients to RR: -1
+        if self.use_ev_optimization or self.use_hybrid_optimization:
+            rr = risk_reward_ratio()
+            if self.ev_win_coefficient != rr or self.ev_loss_coefficient != -1.0:
+                logger.warning(
+                    (
+                        f"Overriding EV coefficients to match RR: win={rr:.2f}, loss=-1.0 "
+                        "(derived from ATR TP/SL multipliers)."
+                    )
+                )
+                self.ev_win_coefficient = rr
+                self.ev_loss_coefficient = -1.0
         
         if self.min_hold_minutes < 1:
             raise ValueError(f"min_hold_minutes must be >= 1, got {self.min_hold_minutes}")

@@ -135,25 +135,21 @@ def validate_sequence_boundaries(
         ⚠️  5 sequences cross train/val boundary
         ⚠️  3 sequences cross val/test boundary
     """
-    # Check sequences that might cross train/val boundary
+    # Sequences are indexed by their LAST candle. Start index = i - window_size + 1
+    # Count sequences where start_index <= boundary < end_index (i)
     train_boundary_crossings = 0
-    for i in range(max(0, train_end_idx - window_size + 1), min(train_end_idx + 1, len(timestamps))):
-        seq_start = timestamps[i] if i < len(timestamps) else None
-        seq_end = timestamps[min(i + window_size - 1, len(timestamps) - 1)] if i < len(timestamps) else None
-        if seq_start is not None and seq_end is not None:
-            # If sequence spans the boundary, count it
-            if i <= train_end_idx < i + window_size - 1:
-                train_boundary_crossings += 1
+    for i in range(max(0, train_end_idx - window_size + 2), min(train_end_idx + 1, len(timestamps))):
+        start_idx = i - window_size + 1
+        end_idx = i
+        if start_idx <= train_end_idx < end_idx:
+            train_boundary_crossings += 1
     
-    # Check sequences that might cross val/test boundary  
     val_boundary_crossings = 0
-    for i in range(max(0, val_end_idx - window_size + 1), min(val_end_idx + 1, len(timestamps))):
-        seq_start = timestamps[i] if i < len(timestamps) else None
-        seq_end = timestamps[min(i + window_size - 1, len(timestamps) - 1)] if i < len(timestamps) else None
-        if seq_start is not None and seq_end is not None:
-            # If sequence spans the boundary, count it
-            if i <= val_end_idx < i + window_size - 1:
-                val_boundary_crossings += 1
+    for i in range(max(0, val_end_idx - window_size + 2), min(val_end_idx + 1, len(timestamps))):
+        start_idx = i - window_size + 1
+        end_idx = i
+        if start_idx <= val_end_idx < end_idx:
+            val_boundary_crossings += 1
     
     if train_boundary_crossings > 0:
         logger.warning(f"⚠️  {train_boundary_crossings} sequences cross train/val boundary (potential data leakage)")
@@ -524,9 +520,12 @@ def split_and_scale_stage(
     X: np.ndarray,
     y: np.ndarray,
     timestamps: pd.DatetimeIndex,
+    *,
+    window_size: int,
     year_filter: Optional[list[int]] = None,
     use_timeseries_cv: bool = False,
     cv_folds: int = 5,
+    drop_boundary_crossing_sequences: bool = True,
 ) -> Union[
     Tuple[
         np.ndarray, np.ndarray, np.ndarray,
@@ -644,12 +643,51 @@ def split_and_scale_stage(
             n = len(X)
             train_idx = int(0.7 * n)
             val_idx = int(0.85 * n)
-            X_train, y_train = X[:train_idx], y[:train_idx]
-            X_val, y_val = X[train_idx:val_idx], y[train_idx:val_idx]
-            X_test, y_test = X[val_idx:], y[val_idx:]
-            ts_train = timestamps[:train_idx]
-            ts_val = timestamps[train_idx:val_idx]
-            ts_test = timestamps[val_idx:]
+            # Compute global boundary indices
+            train_end_global = train_idx - 1
+            val_end_global = val_idx - 1
+
+            # Build slices
+            X_train_raw, y_train_raw = X[:train_idx], y[:train_idx]
+            X_val_raw, y_val_raw = X[train_idx:val_idx], y[train_idx:val_idx]
+            X_test_raw, y_test_raw = X[val_idx:], y[val_idx:]
+            ts_train_raw = timestamps[:train_idx]
+            ts_val_raw = timestamps[train_idx:val_idx]
+            ts_test_raw = timestamps[val_idx:]
+
+            if drop_boundary_crossing_sequences:
+                # Drop validation sequences whose window starts before or at train_end_global
+                val_indices_global = np.arange(train_idx, val_idx)
+                val_last = val_indices_global
+                val_start = val_last - window_size + 1
+                keep_val_mask = val_start > train_end_global
+                X_val = X_val_raw[keep_val_mask]
+                y_val = y_val_raw[keep_val_mask]
+                ts_val = ts_val_raw[keep_val_mask]
+
+                # Drop test sequences whose window starts before or at val_end_global
+                test_indices_global = np.arange(val_idx, n)
+                test_last = test_indices_global
+                test_start = test_last - window_size + 1
+                keep_test_mask = test_start > val_end_global
+                X_test = X_test_raw[keep_test_mask]
+                y_test = y_test_raw[keep_test_mask]
+                ts_test = ts_test_raw[keep_test_mask]
+
+                # Training sequences are safe by construction
+                X_train, y_train, ts_train = X_train_raw, y_train_raw, ts_train_raw
+
+                removed_val = len(X_val_raw) - len(X_val)
+                removed_test = len(X_test_raw) - len(X_test)
+                if removed_val > 0 or removed_test > 0:
+                    logger.info(
+                        f"Dropped boundary-crossing sequences: val={removed_val}, test={removed_test}"
+                    )
+            else:
+                X_train, y_train, ts_train = X_train_raw, y_train_raw, ts_train_raw
+                X_val, y_val, ts_val = X_val_raw, y_val_raw, ts_val_raw
+                X_test, y_test, ts_test = X_test_raw, y_test_raw, ts_test_raw
+            
             logger.info(f"Using percentage split (70/15/15) for year_filter={year_filter}")
         else:
             # Use fixed date split for full dataset
@@ -665,7 +703,6 @@ def split_and_scale_stage(
         # Validate sequence boundaries to prevent data leakage
         train_end_idx = len(X_train) - 1
         val_end_idx = len(X_train) + len(X_val) - 1
-        window_size = X.shape[1] // 24  # Approximate window size from feature dimensions
         validate_sequence_boundaries(timestamps, train_end_idx, val_end_idx, window_size)
         
         # CRITICAL: Fit scaler ONLY on training data
