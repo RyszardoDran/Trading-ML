@@ -66,6 +66,19 @@ class Program
                     return 1;
                 }
             }
+            else if (options.SampleCandleCount > 0)
+            {
+                logger.LogInformation($"Generating {options.SampleCandleCount} sample candles");
+                candles = GenerateSampleCandles(options.SampleCandleCount);
+
+                // Validate sample candles
+                var candleParser = new CandleParser(new ConsoleLogger<CandleParser>());
+                if (!candleParser.ValidateCandles(candles, metadata.RecommendedMinCandles))
+                {
+                    logger.LogError("Sample candle validation failed");
+                    return 1;
+                }
+            }
             else
             {
                 logger.LogError("Either --candles-file or --sample must be specified");
@@ -80,7 +93,8 @@ class Program
                 modelsDir,
                 pythonPath,
                 metadata,
-                new ConsoleLogger<PredictionService>()
+                new ConsoleLogger<PredictionService>(),
+                options.SkipRegime // pass through CLI flag
             );
 
             logger.LogInformation("\n" + new string('=', 80));
@@ -119,35 +133,61 @@ class Program
         ModelMetadata metadata,
         ConsoleLogger<Program> logger)
     {
-        const int WINDOW_SIZE_MINUTES = 7 * 24 * 60; // 7 days in minutes
-        const int STEP_SIZE = 60; // Move 1 candle at a time
+        // Model uses M5 candles, but backend receives M1 candles
+        // Convert window size: 80 M5 candles = 400 M1 candles = 400 minutes
+        int windowSizeMinutes = metadata.WindowSize * 5; // M5 to M1 conversion
+        const int STEP_SIZE = 60; // Move 1 candle at a time (1 minute steps)
 
         var results = new List<SlidingWindowResult>();
 
-        if (candles.Count < WINDOW_SIZE_MINUTES)
+        if (candles.Count < windowSizeMinutes)
         {
-            logger.LogError($"Insufficient candles. Need {WINDOW_SIZE_MINUTES}, have {candles.Count}");
+            logger.LogError($"Insufficient candles. Need {windowSizeMinutes}, have {candles.Count}");
             return results;
         }
 
-        logger.LogInformation($"Starting sliding window analysis: {candles.Count} candles, window size: {WINDOW_SIZE_MINUTES} minutes, step: {STEP_SIZE}");
-        logger.LogInformation($"Total windows: {candles.Count - WINDOW_SIZE_MINUTES + 1}");
+        logger.LogInformation($"Starting sliding window analysis: {candles.Count} candles, window size: {windowSizeMinutes} minutes ({metadata.WindowSize} M5 candles), step: {STEP_SIZE}");
+        logger.LogInformation($"Total windows: {candles.Count - windowSizeMinutes + 1}");
         Console.WriteLine();
 
         int windowCount = 0;
         int buySignalCount = 0;
 
-        for (int i = 0; i <= candles.Count - WINDOW_SIZE_MINUTES; i += STEP_SIZE)
+        // Diagnostics
+        int windowsWithPrediction1 = 0;
+        int windowsWithProbGEThreshold = 0;
+        int prediction1ButNotSignal = 0;
+        var probabilities = new List<double>();
+
+        // Start sliding window from where we have enough context for indicator calculation
+        int minContextCandlesM5 = Math.Max(metadata.RecommendedMinCandles, metadata.WindowSize + 200); // M5 candles
+        int minContextCandlesM1 = minContextCandlesM5 * 5; // Convert to M1 candles
+        int startIndex = Math.Max(0, minContextCandlesM1 - windowSizeMinutes);
+
+        for (int i = startIndex; i <= candles.Count - windowSizeMinutes; i += STEP_SIZE)
         {
-            // Get current window
-            var windowCandles = candles.GetRange(i, WINDOW_SIZE_MINUTES);
-            var windowEndTime = windowCandles.Last().Timestamp;
-            var windowEndIndex = i + WINDOW_SIZE_MINUTES - 1;
+            // Get current window - send ALL candles up to window end for proper indicator calculation
+            var windowEndIndex = i + windowSizeMinutes - 1;
+            var contextCandles = candles.GetRange(0, windowEndIndex + 1);  // All candles from start to window end
+            var windowEndTime = candles[windowEndIndex].Timestamp;
+
+            // Ensure we have minimum required context
+            if (contextCandles.Count < minContextCandlesM1)
+            {
+                logger.LogDebug($"Skipping window at index {i}: insufficient context ({contextCandles.Count} < {minContextCandlesM1})");
+                continue;
+            }
 
             // Run prediction on this window
-            var result = await predictionService.PredictAsync(windowCandles);
+            var result = await predictionService.PredictAsync(contextCandles);
 
             windowCount++;
+
+            // Collect diagnostics
+            probabilities.Add(result.Probability);
+            if (result.Prediction == 1) windowsWithPrediction1++;
+            if (result.Probability >= result.Threshold) windowsWithProbGEThreshold++;
+            if (result.Prediction == 1 && !result.IsSignal) prediction1ButNotSignal++;
 
             // Log progress
             if (windowCount % 100 == 0)
@@ -201,6 +241,32 @@ class Program
                 }
                 Console.WriteLine();
             }
+        }
+
+        // Write diagnostics summary
+        var diag = new
+        {
+            TotalWindows = windowCount,
+            WindowsWithPrediction1 = windowsWithPrediction1,
+            WindowsWithProbabilityGEThreshold = windowsWithProbGEThreshold,
+            Prediction1ButNotSignal = prediction1ButNotSignal,
+            MeanProbability = probabilities.Any() ? probabilities.Average() : 0.0,
+            MaxProbability = probabilities.Any() ? probabilities.Max() : 0.0,
+            MinProbability = probabilities.Any() ? probabilities.Min() : 0.0,
+            TopProbabilities = probabilities.OrderByDescending(p => p).Take(20).ToList()
+        };
+
+        try
+        {
+            var diagDir = Path.Combine(AppContext.BaseDirectory, "..", "outputs");
+            Directory.CreateDirectory(diagDir);
+            var diagFile = Path.Combine(diagDir, $"prediction_diagnostics_{DateTime.UtcNow:yyyyMMddHHmmss}.json");
+            File.WriteAllText(diagFile, System.Text.Json.JsonSerializer.Serialize(diag, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            logger.LogInformation($"Diagnostics saved to {diagFile}");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to save diagnostics");
         }
 
         logger.LogInformation($"\nAnalysis complete. Total windows: {windowCount}, BUY signals found: {buySignalCount}");
@@ -508,7 +574,8 @@ class Program
         var candles = new List<Candle>();
         var random = new Random(42); // Fixed seed for reproducibility
         var basePrice = 2000.0;
-        var baseTime = DateTime.UtcNow.AddMinutes(-count);
+        // Generate candles over 7 days to match Python's "last 7 days" expectation
+        var baseTime = DateTime.UtcNow.AddDays(-7);
 
         for (int i = 0; i < count; i++)
         {
@@ -565,6 +632,8 @@ class ArgumentParser
         public string? OutputFile { get; set; }
         public string? PythonPath { get; set; }
         public int SampleCandleCount { get; set; }
+        // New: allow passing --skip-regime to instruct Python to bypass regime filters
+        public bool SkipRegime { get; set; }
     }
 
     public Options Parse(string[] args)
@@ -595,6 +664,11 @@ class ArgumentParser
                     options.PythonPath = i + 1 < args.Length ? args[++i] : null;
                     break;
 
+                case "--skip-regime":
+                    // Flag - no argument consumed
+                    options.SkipRegime = true;
+                    break;
+
                 case "--sample":
                     if (i + 1 < args.Length && int.TryParse(args[++i], out var count))
                         options.SampleCandleCount = count;
@@ -621,6 +695,7 @@ class ArgumentParser
         Console.WriteLine("  --models-dir <path>     Path to model artifacts (default: auto-detect)");
         Console.WriteLine("  --output <path>         Save results to JSON file (optional)");
         Console.WriteLine("  --python <path>         Python executable path (default: python)");
+        Console.WriteLine("  --skip-regime            Skip ML regime filters when calling Python (sets SKIP_REGIME_FILTER=1)");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  # Use sample candles");

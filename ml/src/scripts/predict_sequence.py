@@ -279,19 +279,19 @@ def predict(
     if scaler is None:
         raise ValueError("Scaler artifact missing; retrain pipeline to regenerate artifacts")
 
-    # Calculate recommended minimum candles (conservative: window_size + 200 for SMA200)
-    min_recommended_candles = window_size + 200
-    
-    # Validate input
-    if len(candles) < window_size:
+    # Calculate recommended minimum candles in M1 units (use metadata if available)
+    recommended_min_m1 = artifacts.get("recommended_min_candles_m1", (window_size + 200) * 5)
+
+    # Validate input (check M1 candles provided)
+    if len(candles) < window_size * 5:
         raise ValueError(
-            f"Insufficient candles: need at least {window_size} for prediction, got {len(candles)}"
+            f"Insufficient M1 candles: need at least {window_size*5} (window_size={window_size} M5 candles), got {len(candles)}"
         )
-    
-    if len(candles) < min_recommended_candles:
+
+    if len(candles) < recommended_min_m1:
         logger.warning(
-            f"Low candle count: {len(candles)} candles provided. "
-            f"Recommend at least {min_recommended_candles} ({window_size} + 200 for SMA200) "
+            f"Low candle count: {len(candles)} M1 candles provided. "
+            f"Recommend at least {recommended_min_m1} M1 candles ({(recommended_min_m1//5)} M5 candles) "
             f"or {analysis_window_days} days (~{analysis_window_days * 24 * 60} M1 candles) for optimal indicator accuracy."
         )
     
@@ -308,6 +308,11 @@ def predict(
     candles_m5 = aggregate_to_m5(candles)
     logger.debug(f"Aggregated to {len(candles_m5)} M5 candles ({len(candles_m5)/m1_candles_count*100:.1f}% compression)")
 
+    if len(candles_m5) < window_size:
+        raise ValueError(
+            f"Insufficient M5 candles after aggregation: need at least {window_size}, got {len(candles_m5)}"
+        )
+
     entry_price = float(candles_m5["Close"].iloc[-1])
     atr_m5 = _compute_atr_m5(candles_m5)
     
@@ -316,9 +321,10 @@ def predict(
     logger.debug(f"Engineering features on {len(candles_m5)} M5 candles (with M15/M60 context)...")
     features_full = engineer_m5_candle_features(candles_m5)
     
-    if len(features_full) != len(candles_m5):
+    # Ensure we have enough engineered rows to build the final sequence
+    if len(features_full) < window_size:
         raise ValueError(
-            f"Feature engineering produced {len(features_full)} rows, expected {len(candles_m5)}"
+            f"Insufficient engineered feature rows: need at least {window_size}, got {len(features_full)}"
         )
     
     # STEP 3: Extract LAST window_size M5 candles for prediction
@@ -330,11 +336,13 @@ def predict(
             f"After extracting sequence, got {len(features)} rows, expected {window_size}"
         )
 
-    # Verify feature alignment
-    if list(features.columns) != feature_columns:
-        logger.warning("Feature columns mismatch; attempting to reorder")
+    # Keep full features (for trend/regime checks) and create a separate
+    # DataFrame for model input (may be reordered to match saved columns)
+    features_for_model = features.copy()
+    if list(features_for_model.columns) != feature_columns:
+        logger.warning("Feature columns mismatch; attempting to reorder for model input")
         try:
-            features = features[feature_columns]
+            features_for_model = features_for_model[feature_columns]
         except KeyError as e:
             raise ValueError(f"Feature mismatch: {e}")
 
@@ -355,50 +363,54 @@ def predict(
 
     # --- TREND FILTER CHECK ---
     # Check if the latest candle is in an uptrend (Close > SMA200) AND ADX > 15 AND RSI_M5 < 75
-    if "dist_sma_200" in features.columns and "adx" in features.columns:
-        last_dist = features["dist_sma_200"].iloc[-1]
-        last_adx = features["adx"].iloc[-1]
-        
-        if last_dist <= 0:
-            logger.debug(f"Trend Filter: dist_sma_200={last_dist:.4f} (filtered)")
-            return {
-                **common_result,
-                "probability": 0.0,
-                "prediction": 0,
-                "expected_win_rate": 0.0,
-                "confidence": "low (trend filter)",
-                "sl": None,
-                "tp": None,
-            }
-        if last_adx <= 15:
-            logger.debug(f"Trend Filter: ADX={last_adx:.2f} (filtered)")
-            return {
-                **common_result,
-                "probability": 0.0,
-                "prediction": 0,
-                "expected_win_rate": 0.0,
-                "confidence": "low (weak trend)",
-                "sl": None,
-                "tp": None,
-            }
+    skip_regime_env = os.getenv("SKIP_REGIME_FILTER") is not None and os.getenv("SKIP_REGIME_FILTER").strip().lower() in ("1","true","yes","y")
+    if skip_regime_env:
+        logger.info("Skipping trend/pullback filters because SKIP_REGIME_FILTER is set")
+    else:
+        if "dist_sma_200" in features.columns and "adx" in features.columns:
+            last_dist = features["dist_sma_200"].iloc[-1]
+            last_adx = features["adx"].iloc[-1]
             
-    if "rsi_m5" in features.columns:
-        last_rsi = features["rsi_m5"].iloc[-1]
-        if last_rsi >= 75:
-            logger.debug(f"Pullback Filter: RSI_M5={last_rsi:.2f} (filtered)")
-            return {
-                **common_result,
-                "probability": 0.0,
-                "prediction": 0,
-                "expected_win_rate": 0.0,
-                "confidence": "low (overbought)",
-                "sl": None,
-                "tp": None,
-            }
+            if last_dist <= 0:
+                logger.debug(f"Trend Filter: dist_sma_200={last_dist:.4f} (filtered)")
+                return {
+                    **common_result,
+                    "probability": 0.0,
+                    "prediction": 0,
+                    "expected_win_rate": 0.0,
+                    "confidence": "low (trend filter)",
+                    "sl": None,
+                    "tp": None,
+                }
+            if last_adx <= 15:
+                logger.debug(f"Trend Filter: ADX={last_adx:.2f} (filtered)")
+                return {
+                    **common_result,
+                    "probability": 0.0,
+                    "prediction": 0,
+                    "expected_win_rate": 0.0,
+                    "confidence": "low (weak trend)",
+                    "sl": None,
+                    "tp": None,
+                }
+                
+        if "rsi_m5" in features.columns:
+            last_rsi = features["rsi_m5"].iloc[-1]
+            if last_rsi >= 75:
+                logger.debug(f"Pullback Filter: RSI_M5={last_rsi:.2f} (filtered)")
+                return {
+                    **common_result,
+                    "probability": 0.0,
+                    "prediction": 0,
+                    "expected_win_rate": 0.0,
+                    "confidence": "low (overbought)",
+                    "sl": None,
+                    "tp": None,
+                }
     # --------------------------
 
-    # Flatten to model input format
-    X_raw = features.values.flatten().reshape(1, -1)
+    # Flatten to model input format using the reordered model input features
+    X_raw = features_for_model.values.flatten().reshape(1, -1)
     X_scaled = scaler.transform(X_raw)
     X = X_scaled.astype(np.float32)
 
@@ -612,6 +624,11 @@ if __name__ == "__main__":
         default=None,
         help="Directory containing model artifacts (default: ml/src/models)",
     )
+    parser.add_argument(
+        "--skip-regime",
+        action="store_true",
+        help="Skip trend/regime filters for this run (temporary; overrides config/env).",
+    )
     args = parser.parse_args()
 
     try:
@@ -620,6 +637,11 @@ if __name__ == "__main__":
             models_dir = Path(args.models_dir)
         else:
             models_dir = Path(__file__).parent.parent.parent / "outputs" / "models"
+
+        # CLI override: skip regime/trend gating if requested
+        if getattr(args, "skip_regime", False):
+            os.environ["SKIP_REGIME_FILTER"] = "1"
+            logger.info("SKIP_REGIME_FILTER set via --skip-regime CLI flag (regime filters will be skipped)")
 
         # Load candles
         if args.input_csv:

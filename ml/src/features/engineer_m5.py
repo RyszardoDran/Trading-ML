@@ -291,28 +291,31 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     
     # Align M15 to M5 index (backward-fill to avoid lookahead)
     # Use bfill instead of ffill: at time T, use PREVIOUS M15 bar that closed BEFORE T
+    # Use forward-fill (ffill) to align higher-timeframe bars to the current M5 timestamp
+    # At time T we want the last closed M15/M60 bar that closed BEFORE T (ffill),
+    # not the next bar in the future (bfill) which introduces lookahead.
     try:
-        rsi_m15 = rsi_m15.reindex(df_m5.index, method='bfill').fillna(50)
+        rsi_m15 = rsi_m15.reindex(df_m5.index, method='ffill').fillna(50)
     except Exception:
         rsi_m15 = pd.Series(50.0, index=df_m5.index)
     try:
-        bb_pos_m15 = bb_pos_m15.reindex(df_m5.index, method='bfill').fillna(0.5)
+        bb_pos_m15 = bb_pos_m15.reindex(df_m5.index, method='ffill').fillna(0.5)
     except Exception:
         bb_pos_m15 = pd.Series(0.5, index=df_m5.index)
     try:
-        dist_sma_20_m15 = dist_sma_20_m15.reindex(df_m5.index, method='bfill').fillna(0)
+        dist_sma_20_m15 = dist_sma_20_m15.reindex(df_m5.index, method='ffill').fillna(0)
     except Exception:
         dist_sma_20_m15 = pd.Series(0.0, index=df_m5.index)
     try:
-        dist_sma_200 = dist_sma_200_m15.reindex(df_m5.index, method='bfill').fillna(0)
+        dist_sma_200 = dist_sma_200_m15.reindex(df_m5.index, method='ffill').fillna(0)
     except Exception:
         dist_sma_200 = pd.Series(0.0, index=df_m5.index)
     try:
-        volume_m15_norm = volume_m15_norm.reindex(df_m5.index, method='bfill').fillna(1.0)
+        volume_m15_norm = volume_m15_norm.reindex(df_m5.index, method='ffill').fillna(1.0)
     except Exception:
         volume_m15_norm = pd.Series(1.0, index=df_m5.index)
     try:
-        cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='bfill').fillna(0)
+        cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='ffill').fillna(0)
     except Exception:
         cvd_m15_norm = pd.Series(0.0, index=df_m15.index)
     
@@ -362,13 +365,13 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     else:
         mfi_m60_norm = pd.Series(0.0, index=df_m60.index)
     
-    # Align M60 to M5 index (backward-fill to avoid lookahead)
-    # Use bfill instead of ffill: at time T, use PREVIOUS M60 bar that closed BEFORE T
-    rsi_m60 = rsi_m60.reindex(df_m5.index, method='bfill').fillna(50)
-    bb_pos_m60 = bb_pos_m60.reindex(df_m5.index, method='bfill').fillna(0.5)
-    cvd_m60_norm = cvd_m60_norm.reindex(df_m5.index, method='bfill').fillna(0)
-    obv_m60_norm = obv_m60_norm.reindex(df_m5.index, method='bfill').fillna(0)
-    mfi_m60_norm = mfi_m60_norm.reindex(df_m5.index, method='bfill').fillna(0)
+    # Align M60 to M5 index using forward-fill to avoid lookahead
+    # Use ffill so that at time T we use the most recent M60 bar that closed before T
+    rsi_m60 = rsi_m60.reindex(df_m5.index, method='ffill').fillna(50)
+    bb_pos_m60 = bb_pos_m60.reindex(df_m5.index, method='ffill').fillna(0.5)
+    cvd_m60_norm = cvd_m60_norm.reindex(df_m5.index, method='ffill').fillna(0)
+    obv_m60_norm = obv_m60_norm.reindex(df_m5.index, method='ffill').fillna(0)
+    mfi_m60_norm = mfi_m60_norm.reindex(df_m5.index, method='ffill').fillna(0)
     
     # ========== Create M5 Features DataFrame ==========
     features_dict = {}
@@ -403,14 +406,20 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         
     if FEAT_ENABLE_ATR:
         features_dict["atr_norm_m5"] = atr_norm.fillna(1.0)
+        # Also expose raw ATR (absolute units) required by regime filters and target logic
+        features_dict["atr_m5"] = atr_14.fillna(0.0)
     else:
         features_dict["atr_norm_m5"] = pd.Series(1.0, index=df_m5.index)
-        
+        features_dict["atr_m5"] = pd.Series(0.0, index=df_m5.index)
+    
     if FEAT_ENABLE_ADX:
         features_dict["adx"] = adx.fillna(20)
     else:
         features_dict["adx"] = pd.Series(20.0, index=df_m5.index)
-        
+
+    # Provide raw SMA200 level as well (regime filter expects 'sma_200')
+    features_dict["sma_200"] = sma_200.ffill().fillna(sma_200.mean() if not sma_200.empty else 0.0)
+
     if ENABLE_CVD_INDICATOR:
         features_dict["cvd_m5"] = cvd_norm.fillna(0)
     else:
@@ -420,7 +429,7 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         # Keep original M5 SMA200 distance for backwards compatibility
         features_dict["dist_sma_200_m5"] = dist_sma_200_m5.fillna(0)
         # Add M15 SMA200 distance as a separate feature for model to learn longer-term trend
-        features_dict["dist_sma_200_m15"] = dist_sma_200_m15.reindex(df_m5.index, method='bfill').fillna(0)
+        features_dict["dist_sma_200_m15"] = dist_sma_200_m15.reindex(df_m5.index, method='ffill').fillna(0)
         # Preserve legacy 'dist_sma_200' name as the M5 version (used by filters by default)
         features_dict["dist_sma_200"] = dist_sma_200_m5.fillna(0)
     else:
@@ -499,7 +508,11 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     
     # Clean NaN and inf values
     features_m5.replace([np.inf, -np.inf], np.nan, inplace=True)
-    features_m5 = features_m5.ffill().bfill().fillna(0)
+    # Use forward-fill only to propagate historical values; drop initial warmup rows that still contain NaN
+    features_m5 = features_m5.ffill()
+    features_m5 = features_m5.dropna()
+    # Final safety: fill any remaining tiny gaps with zero (should be none)
+    features_m5 = features_m5.fillna(0)
     
     # Final validation
     if features_m5.empty:

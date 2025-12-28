@@ -96,8 +96,10 @@ def save_artifacts(
         "analysis_window_days": analysis_window_days,
         "n_features_per_candle": len(feature_cols),
         "total_features": len(feature_cols) * window_size,
-        "recommended_min_candles": window_size + 200,  # Conservative: window + SMA200
-        "recommended_analysis_candles": analysis_window_days * 24 * 60,  # Days to M1 candles
+        # Explicitly store both M5- and M1-based recommendations to avoid unit confusion
+        "recommended_min_candles_m5": int(window_size + 200),  # M5 candles: window + SMA200
+        "recommended_min_candles_m1": int((window_size + 200) * 5),  # Convert to M1 candles
+        "recommended_analysis_candles_m1": int(analysis_window_days * 24 * 60),  # Days -> M1 candles
     }
 
     # Optional knobs (help with reproducibility and inference policy)

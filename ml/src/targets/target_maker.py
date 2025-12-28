@@ -18,24 +18,35 @@ def make_target(
     atr_multiplier_tp: float = 4.0,
     min_hold_minutes: int = 10,
     max_horizon: int = 120,
+    *,
+    slippage: float = 0.0,
 ) -> pd.Series:
     """Create binary classification target based on SL/TP hit logic (Vectorized).
 
+    Notes:
+        - When `df` is on M5 timeframe the `min_hold_minutes` and `max_horizon`
+          parameters should be provided in M5 steps (e.g., min_hold_minutes=3 = 3 M5 candles).
+        - We treat tie (TP and SL hit in the same future candle) conservatively as a LOSS
+          (i.e., TP must strictly occur earlier than SL to be considered a win).
+        - Optional `slippage` (same units as price) can be specified to make targets
+          more realistic (reduce TP and increase chance of SL to account for spread/slippage).
+
     Definition:
         For each candle, simulate a trade with:
-        - SL = entry_price - (ATR × atr_multiplier_sl)
-        - TP = entry_price + (ATR × atr_multiplier_tp)
+        - SL = entry_price - (ATR × atr_multiplier_sl) + slippage
+        - TP = entry_price + (ATR × atr_multiplier_tp) - slippage
         - RR Ratio = atr_multiplier_tp / atr_multiplier_sl (default 1:2)
         
-        Target = 1 if TP is hit before SL within max_horizon minutes
-        Target = 0 if SL is hit first or neither is hit within max_horizon
+        Target = 1 if TP is hit before SL within max_horizon steps
+        Target = 0 if SL hit first or neither hit within max_horizon
 
     Args:
         df: OHLCV DataFrame with datetime index
         atr_multiplier_sl: ATR multiplier for Stop Loss (default: 2.0)
         atr_multiplier_tp: ATR multiplier for Take Profit (default: 4.0)
-        min_hold_minutes: Minimum time before TP can be hit (default: 10)
-        max_horizon: Maximum minutes to wait for TP/SL hit (default: 120)
+        min_hold_minutes: Minimum steps (M5 candles) to wait before TP can occur
+        max_horizon: Maximum forward steps (M5 candles) to simulate
+        slippage: Optional price slippage/spread to subtract from TP and add to SL
 
     Returns:
         Binary series (0/1) aligned to original index
@@ -59,11 +70,15 @@ def make_target(
     low_series = df["Low"].astype(np.float32)
     close_series = df["Close"].astype(np.float32)
     
-    if "ATR_M5" in df.columns:
-        logger.info("Using pre-calculated M5 ATR for SL/TP targets")
+    # Prefer explicit 'atr_m5' if present (engineer_m5 now provides this). Fallback to other names
+    if "atr_m5" in df.columns:
+        logger.info("Using pre-calculated M5 ATR (atr_m5) for SL/TP targets")
+        atr_series = df["atr_m5"].astype(np.float32)
+    elif "ATR_M5" in df.columns:
+        logger.info("Using pre-calculated M5 ATR (ATR_M5) for SL/TP targets")
         atr_series = df["ATR_M5"].astype(np.float32)
     else:
-        logger.info("Calculating M1 ATR(14) for SL/TP targets (fallback)")
+        logger.info("No precomputed ATR column found; calculating ATR (14) on provided timeframe")
         tr1 = high_series - low_series
         tr2 = np.abs(high_series - close_series.shift(1))
         tr3 = np.abs(low_series - close_series.shift(1))
@@ -77,8 +92,9 @@ def make_target(
     atrs = atr_series.values
     
     # Calculate levels
-    sl_levels = closes - (atrs * atr_multiplier_sl)
-    tp_levels = closes + (atrs * atr_multiplier_tp)
+    # Apply optional slippage conservatively: increase sl (closer) and decrease tp (harder to hit)
+    sl_levels = closes - (atrs * atr_multiplier_sl) + slippage
+    tp_levels = closes + (atrs * atr_multiplier_tp) - slippage
     
     # Vectorized look-forward using stride_tricks
     from numpy.lib.stride_tricks import as_strided
@@ -127,15 +143,9 @@ def make_target(
     tp_any = hit_tp.max(axis=1)
     sl_any = hit_sl.max(axis=1)
     
-    # Determine target
-    # TP wins if:
-    # 1. TP was hit (tp_any is True)
-    # 2. AND (SL was NOT hit OR TP was hit before or at same time as SL)
-    # Note: If tp_idx == sl_idx, it means both hit in same candle. 
-    # We assume TP takes precedence (optimistic) or check High/Low logic.
-    # Original code checked TP first in loop, so TP precedence.
-    
-    tp_wins = tp_any & (~sl_any | (tp_idx <= sl_idx))
+    # Determine target (CONSERVATIVE):
+    # TP wins only if TP was hit and it was strictly before SL. If both hit in same candle, treat as LOSS.
+    tp_wins = tp_any & (~sl_any | (tp_idx < sl_idx))
     
     # Initialize target array
     target = np.zeros(n_samples, dtype=np.float32)

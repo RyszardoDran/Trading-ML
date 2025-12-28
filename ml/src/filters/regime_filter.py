@@ -19,6 +19,7 @@ IMPLEMENTATION:
 """
 
 import logging
+import os
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -107,6 +108,17 @@ def classify_regime(
     }
 
 
+def _env_skip_regime_filter() -> bool:
+    """Return True if environment requests skipping the regime filter.
+
+    Set SKIP_REGIME_FILTER=1 or SKIP_REGIME_FILTER=true to bypass gating (useful for testing).
+    """
+    val = os.getenv("SKIP_REGIME_FILTER")
+    if val is None:
+        return False
+    return val.strip().lower() in ("1", "true", "yes", "y")
+
+
 def should_trade(
     atr_m5: float,
     adx: float,
@@ -114,6 +126,7 @@ def should_trade(
     sma200: float,
     threshold: Optional[float] = None,
 ) -> Tuple[bool, str, str]:
+
     """Determine if current market conditions warrant trading.
     
     This implements the regime gating logic from Audit 4:
@@ -141,8 +154,13 @@ def should_trade(
         >>> should_trade(atr_m5=8, adx=8, price=2615, sma200=2620)
         (False, "TIER3_LOW_ATR", "Low ATR + No trend + Not uptrend")
     """
+    # Allow runtime override via environment variable for quick testing
+    if _env_skip_regime_filter():
+        logger.info("Regime filter disabled via SKIP_REGIME_FILTER env var")
+        return True, "FILTER_DISABLED_ENV", "Regime filter disabled by SKIP_REGIME_FILTER"
+
     if not ENABLE_REGIME_FILTER:
-        # Regime filter disabled, always trade
+        # Regime filter disabled (config), always trade
         return True, "FILTER_DISABLED", "Regime filter is disabled"
     
     regime, details = classify_regime(atr_m5, adx, price, sma200)
@@ -227,6 +245,11 @@ def filter_sequences_by_regime(
         - Keeps all sequences in high-ATR periods
         - Expected: raise average win rate from 31.58% to 45-50%
     """
+    if _env_skip_regime_filter():
+        logger.info("Regime filter disabled via SKIP_REGIME_FILTER env var - skipping sequence filtering")
+        mask = np.ones(len(features), dtype=bool)
+        return features, targets, timestamps, mask
+
     if not ENABLE_REGIME_FILTER:
         mask = np.ones(len(features), dtype=bool)
         return features, targets, timestamps, mask
@@ -297,6 +320,12 @@ def filter_predictions_by_regime(
     Returns:
         Boolean array of predictions after regime gating
     """
+    if _env_skip_regime_filter():
+        logger.info("Regime filter disabled via SKIP_REGIME_FILTER env var - skipping prediction filtering")
+        if threshold is None:
+            threshold = 0.5
+        return (predictions >= threshold).astype(int).values
+
     if not ENABLE_REGIME_FILTER:
         if threshold is None:
             threshold = 0.5

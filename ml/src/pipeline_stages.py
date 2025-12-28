@@ -524,6 +524,7 @@ def split_and_scale_stage(
     X: np.ndarray,
     y: np.ndarray,
     timestamps: pd.DatetimeIndex,
+    window_size: int,
     year_filter: Optional[list[int]] = None,
     use_timeseries_cv: bool = False,
     cv_folds: int = 5,
@@ -665,7 +666,7 @@ def split_and_scale_stage(
         # Validate sequence boundaries to prevent data leakage
         train_end_idx = len(X_train) - 1
         val_end_idx = len(X_train) + len(X_val) - 1
-        window_size = X.shape[1] // 24  # Approximate window size from feature dimensions
+        # Use explicit window_size (in M5 candles) passed into this stage
         validate_sequence_boundaries(timestamps, train_end_idx, val_end_idx, window_size)
         
         # CRITICAL: Fit scaler ONLY on training data

@@ -1,0 +1,29 @@
+2025-12-29 00:13:05 - ml.src.pipeline_config_extended - INFO - Pipeline configuration validated successfully
+2025-12-29 00:13:05 - __main__ - INFO - 
+================================================================================
+2025-12-29 00:13:05 - __main__ - INFO - SEQUENCE XGBoost TRAINING PIPELINE - XAU/USD 1-Minute Data
+2025-12-29 00:13:05 - __main__ - INFO - ================================================================================
+2025-12-29 00:13:05 - __main__ - INFO - Log file: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\logs\sequence_xgb_train_all_years_20251229_001305.log
+2025-12-29 00:13:05 - __main__ - INFO - Start time: 2025-12-29 00:13:05
+2025-12-29 00:13:05 - __main__ - INFO - Data years: All available years
+2025-12-29 00:13:05 - __main__ - INFO - 
+Pipeline Configuration:
+2025-12-29 00:13:05 - __main__ - INFO -   Feature engineering version: v1
+2025-12-29 00:13:05 - __main__ - INFO -   Window size: 80 candles
+2025-12-29 00:13:05 - __main__ - INFO -   ATR SL multiplier: 1.0x (from risk_config.py)
+2025-12-29 00:13:05 - __main__ - INFO -   ATR TP multiplier: 2.0x (from risk_config.py)
+2025-12-29 00:13:05 - __main__ - INFO -   Min hold time: 3 M5 candles
+2025-12-29 00:13:05 - __main__ - INFO -   Max horizon: 60 M5 candles
+2025-12-29 00:13:05 - __main__ - INFO -   Trading session: london_ny
+2025-12-29 00:13:05 - __main__ - INFO -   Threshold optimization: HYBRID (EV with precision AND recall floors)
+2025-12-29 00:13:05 - __main__ - INFO -     - Min precision: 0.8
+2025-12-29 00:13:05 - __main__ - INFO -     - Min recall: 0.0
+2025-12-29 00:13:05 - __main__ - INFO -     - Win coefficient: 1.0
+2025-12-29 00:13:05 - __main__ - INFO -     - Loss coefficient: -1.0
+2025-12-29 00:13:05 - __main__ - INFO -   M5 alignment filter: disabled
+2025-12-29 00:13:05 - __main__ - INFO -   Trend filter: enabled
+2025-12-29 00:13:05 - __main__ - INFO -   Pullback filter: disabled
+2025-12-29 00:13:05 - __main__ - INFO -   Random state: 42
+2025-12-29 00:13:05 - __main__ - INFO - ================================================================================
+
+2025-12-29 00:13:05 - ml.src.pipeline_stages - INFO - Loading data from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data

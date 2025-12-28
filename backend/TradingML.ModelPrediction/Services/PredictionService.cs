@@ -18,17 +18,20 @@ public class PredictionService
     private readonly string _pythonPath;
     private readonly ModelMetadata _metadata;
     private readonly ILogger<PredictionService> _logger;
+    private readonly bool _skipRegime; // when true, pass --skip-regime to python and set SKIP_REGIME_FILTER env var
 
     public PredictionService(
         string modelsDirectory,
         string pythonPath,
         ModelMetadata metadata,
-        ILogger<PredictionService> logger)
+        ILogger<PredictionService> logger,
+        bool skipRegime = false)
     {
         _modelsDirectory = modelsDirectory ?? throw new ArgumentNullException(nameof(modelsDirectory));
         _pythonPath = pythonPath ?? throw new ArgumentNullException(nameof(pythonPath));
         _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _skipRegime = skipRegime;
     }
 
     /// <summary>
@@ -166,6 +169,13 @@ public class PredictionService
 
             var arguments = $"\"{scriptPath}\" --input-csv \"{tempInputFile}\" --models-dir \"{_modelsDirectory}\"";
 
+            // Append skip-regime if requested by CLI
+            if (_skipRegime)
+            {
+                arguments += " --skip-regime";
+                _logger.LogInformation("Passing --skip-regime to Python subprocess (regime filters will be skipped)");
+            }
+
             _logger.LogDebug($"Calling Python subprocess: {_pythonPath} {arguments}");
 
             var process = new Process
@@ -195,6 +205,12 @@ public class PredictionService
             // Ensure Python prints Unicode safely on Windows consoles.
             process.StartInfo.Environment["PYTHONUTF8"] = "1";
             process.StartInfo.Environment["PYTHONIOENCODING"] = "utf-8";
+
+            // If CLI asked to skip regime, also set SKIP_REGIME_FILTER env var for robustness
+            if (_skipRegime)
+            {
+                process.StartInfo.Environment["SKIP_REGIME_FILTER"] = "1";
+            }
 
             process.Start();
             var output = await process.StandardOutput.ReadToEndAsync();

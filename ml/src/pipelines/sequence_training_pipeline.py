@@ -236,6 +236,7 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         X=X,
         y=y,
         timestamps=timestamps,
+        window_size=params.window_size,
         year_filter=params.year_filter,
         use_timeseries_cv=params.use_timeseries_cv,
         cv_folds=params.cv_folds,
