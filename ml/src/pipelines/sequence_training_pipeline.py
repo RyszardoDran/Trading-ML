@@ -46,7 +46,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 # Add parent directories to path for imports
 _script_dir = Path(__file__).parent
@@ -100,6 +100,9 @@ def _setup_logging(config: PipelineConfig, year_filter: Optional[list[int]] = No
     # Configure root logger with both file and console handlers
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
+    # Prevent duplicate handlers on repeated invocations
+    if root_logger.handlers:
+        root_logger.handlers.clear()
     
     # File handler (detailed logging)
     file_handler = logging.FileHandler(log_filepath, mode='w', encoding='utf-8')
@@ -125,7 +128,7 @@ def _setup_logging(config: PipelineConfig, year_filter: Optional[list[int]] = No
 
 
 
-def run_pipeline(params: PipelineParams) -> Dict[str, float]:
+def run_pipeline(params: PipelineParams) -> Dict[str, Any]:
     """Execute end-to-end sequence XGBoost training pipeline.
 
     **PURPOSE**: Orchestrate complete training pipeline from data loading
@@ -243,7 +246,7 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         from ml.src.utils.timeseries_validation import TimeSeriesValidator
         
         validator = TimeSeriesValidator(n_splits=params.cv_folds)
-        logger.info("Time Series CV complete: aggregated metrics computed; skipping artifact save in CV mode")
+        logger.info("Time Series CV: will aggregate metrics and save artifacts using the last fold model/scaler")
         
         # CV Option A: Do NOT save artifacts in CV mode; report aggregated metrics only
         all_metrics = []
@@ -324,6 +327,7 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
             min_precision=params.min_precision,
             min_recall=params.min_recall,
             threshold_strategy=threshold_strategy,
+            feature_version=params.feature_version,
         )
         
     else:
@@ -357,10 +361,10 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
     
     # ===== STAGE 7: Save artifacts =====
     if params.use_timeseries_cv:
-        # In CV mode, artifacts were saved using the last fold's model and scaler
-        logger.info("CV mode: Skipping model artifacts save (multiple models per fold)")
+        # In CV mode, artifacts have been saved using the last fold's model and scaler
+        logger.info("CV mode: Artifacts saved using last fold model/scaler")
         logger.info(f"CV Results: precision={final_metrics.get('precision_mean', 'N/A'):.3f}±{final_metrics.get('precision_std', 'N/A'):.3f}, "
-                   f"recall={final_metrics.get('recall_mean', 'N/A'):.3f}±{final_metrics.get('recall_std', 'N/A'):.3f}")
+                    f"recall={final_metrics.get('recall_mean', 'N/A'):.3f}±{final_metrics.get('recall_std', 'N/A'):.3f}")
     else:
         # Single split mode - save model artifacts
         threshold_strategy = (

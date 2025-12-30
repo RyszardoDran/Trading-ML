@@ -217,7 +217,6 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     # No M15 alignment here (handled later after M15 is computed)
     # Continue with M5-derived short-term features
     ret_1 = close.pct_change().fillna(0)
-    ret_1 = close.pct_change().fillna(0)
     
     # OBV (On-Balance Volume) on M5
     if FEAT_ENABLE_OBV:
@@ -289,11 +288,9 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     sma_200_m15 = close_m15.rolling(200, min_periods=1).mean()
     dist_sma_200_m15 = (close_m15 - sma_200_m15) / (atr_m15 + 1e-9)
     
-    # Align M15 to M5 index (backward-fill to avoid lookahead)
-    # Use bfill instead of ffill: at time T, use PREVIOUS M15 bar that closed BEFORE T
-    # Use forward-fill (ffill) to align higher-timeframe bars to the current M5 timestamp
-    # At time T we want the last closed M15/M60 bar that closed BEFORE T (ffill),
-    # not the next bar in the future (bfill) which introduces lookahead.
+    # Align M15 to M5 index using forward-fill (ffill) to avoid lookahead
+    # At time T (M5), use the last M15 bar that CLOSED before T
+    # ffill guarantees we never pull values from future M15 bars.
     try:
         rsi_m15 = rsi_m15.reindex(df_m5.index, method='ffill').fillna(50)
     except Exception:
@@ -317,7 +314,7 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     try:
         cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='ffill').fillna(0)
     except Exception:
-        cvd_m15_norm = pd.Series(0.0, index=df_m15.index)
+        cvd_m15_norm = pd.Series(0.0, index=df_m5.index)
     
     # ========== M60 Context (from M5) ==========
     logger.info("Computing M60 context from M5...")
