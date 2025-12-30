@@ -192,16 +192,12 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
     df_m1 = load_and_prepare_data(data_dir, year_filter=params.year_filter)
     
     # ===== STAGE 2: Engineer features (M1→M5 aggregation + feature engineering) =====
-    # Returns: (features_m5, df_m5) where df_m5 is aggregated M5 OHLCV for target creation
-    # Note: engineer_features_stage now internally aggregates M1→M5 and returns M5 features
-    features = engineer_features_stage(df_m1, window_size=params.window_size, feature_version=params.feature_version)
-    
-    # CRITICAL: Get M5 aggregated data for target creation
-    # Use only the date range present in features to avoid leakage
-    from ml.src.features.engineer_m5 import aggregate_to_m5
-    features_start = features.index.min()
-    features_end = features.index.max()
-    df_m5 = aggregate_to_m5(df_m1, start_date=str(features_start), end_date=str(features_end))
+    # Returns: (features, df_m5) where df_m5 is aggregated M5 OHLCV for target creation
+    features, df_m5 = engineer_features_stage(
+        df_m1,
+        window_size=params.window_size,
+        feature_version=params.feature_version
+    )
     
     # ===== STAGE 3: Create targets on M5 timeframe =====
     targets = create_targets_stage(

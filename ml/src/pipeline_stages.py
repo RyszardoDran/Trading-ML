@@ -289,7 +289,7 @@ def engineer_features_stage(
     df: pd.DataFrame,
     window_size: int,
     feature_version: str = "v2",
-) -> pd.DataFrame:
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Engineer technical features on M5 timeframe.
     
     **PURPOSE**: Aggregate M1 data to M5 bars, then engineer technical
@@ -306,8 +306,9 @@ def engineer_features_stage(
         feature_version: (Deprecated) Always uses M5 aggregation version
         
     Returns:
-        DataFrame with 15 engineered features on M5 timeframe.
-        Index is M5-aligned (timestamps ending at :00, :05, :10, :15, etc.)
+        Tuple of (features, df_m5):
+        - features: DataFrame with engineered features on M5 timeframe
+        - df_m5: DataFrame with aggregated M5 OHLCV data
         
     Raises:
         ValueError: If df is empty
@@ -320,7 +321,7 @@ def engineer_features_stage(
         - Compression: ~5x fewer candles (10,080 M1 → 2,016 M5)
         
     Examples:
-        >>> features = engineer_features_stage(df_m1, window_size=60)
+        >>> features, df_m5 = engineer_features_stage(df_m1, window_size=60)
         >>> features.shape
         (2016, 15)  # 15 features on M5 timeframe (5x compression)
     """
@@ -346,7 +347,7 @@ def engineer_features_stage(
     logger.info(f"Features shape: {features.shape}")
     logger.info(f"Feature columns: {len(features.columns)}")
     
-    return features
+    return features, df_m5
 
 
 def create_targets_stage(
