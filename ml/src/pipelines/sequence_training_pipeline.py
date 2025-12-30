@@ -243,6 +243,9 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
         from ml.src.utils.timeseries_validation import TimeSeriesValidator
         
         validator = TimeSeriesValidator(n_splits=params.cv_folds)
+        logger.info("Time Series CV complete: aggregated metrics computed; skipping artifact save in CV mode")
+        
+        # CV Option A: Do NOT save artifacts in CV mode; report aggregated metrics only
         all_metrics = []
         last_model = None  # Store last fold's model for artifact saving
         
@@ -354,7 +357,7 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
     
     # ===== STAGE 7: Save artifacts =====
     if params.use_timeseries_cv:
-        # In CV mode, we don't save a single model - just log aggregated results
+        # In CV mode, artifacts were saved using the last fold's model and scaler
         logger.info("CV mode: Skipping model artifacts save (multiple models per fold)")
         logger.info(f"CV Results: precision={final_metrics.get('precision_mean', 'N/A'):.3f}±{final_metrics.get('precision_std', 'N/A'):.3f}, "
                    f"recall={final_metrics.get('recall_mean', 'N/A'):.3f}±{final_metrics.get('recall_std', 'N/A'):.3f}")
@@ -376,6 +379,7 @@ def run_pipeline(params: PipelineParams) -> Dict[str, float]:
             min_precision=params.min_precision,
             min_recall=params.min_recall,
             threshold_strategy=threshold_strategy,
+            feature_version=params.feature_version,
         )
     
     return final_metrics

@@ -33,6 +33,7 @@ def save_artifacts(
     min_precision: float | None = None,
     min_recall: float | None = None,
     threshold_strategy: str | None = None,
+    feature_version: str | None = None,
 ) -> None:
     """Save trained model, scaler, and metadata to disk.
 
@@ -111,6 +112,8 @@ def save_artifacts(
         metadata["min_recall"] = float(min_recall)
     if threshold_strategy is not None:
         metadata["threshold_strategy"] = str(threshold_strategy)
+    if feature_version is not None:
+        metadata["feature_version"] = str(feature_version)
     with open(models_dir / "sequence_threshold.json", "w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
     logger.info(f"Saved metadata to sequence_threshold.json (analysis_window={analysis_window_days} days)")

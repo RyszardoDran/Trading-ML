@@ -189,7 +189,7 @@ def validate_input_candles(df: pd.DataFrame, required_size: int) -> None:
     if (df[["Open", "High", "Low", "Close"]] <= 0).any().any():
         raise ValueError("OHLC contains non-positive values")
     if (df["High"] < df["Low"]).any():
-        raise ValueError("Price inconsistency: High < Low detected")raise ValueError("Price inconsistency: High < Low detected")
+        raise ValueError("Price inconsistency: High < Low detected")
 
 
 def predict(
@@ -429,18 +429,22 @@ def predict(
 
     # Regime filter: suppress trades in poor regimes (quick production safeguard)
     try:
-        last_feat = features.iloc[-1]
-        adx = float(last_feat.get("adx", np.nan))
-        dist_sma = float(last_feat.get("dist_sma_200", np.nan))
-        sma200 = entry_price - dist_sma if not pd.isna(dist_sma) else float("nan")
+        # If ATR is unavailable, skip regime gating to avoid false suppression
+        if atr_m5 is None:
+            allowed, regime, reason = True, "UNKNOWN", "no_atr"
+        else:
+            last_feat = features.iloc[-1]
+            adx = float(last_feat.get("adx", np.nan))
+            dist_sma = float(last_feat.get("dist_sma_200", np.nan))
+            sma200 = entry_price - dist_sma if not pd.isna(dist_sma) else float("nan")
 
-        allowed, regime, reason = should_trade(
-            atr_m5 if atr_m5 is not None else 0.0,
-            adx,
-            entry_price,
-            sma200,
-            threshold=threshold_used,
-        )
+            allowed, regime, reason = should_trade(
+                atr_m5,
+                adx,
+                entry_price,
+                sma200,
+                threshold=threshold_used,
+            )
     except Exception as e:
         logger.exception("Regime check failed; proceeding without regime gating")
         allowed, regime, reason = True, "UNKNOWN", "failed_check"
@@ -538,7 +542,7 @@ def load_candles_from_csv(
             raise ValueError(f"Insufficient data: need {n_candles} candles, got {len(df)}")
         return df.tail(n_candles)
     else:
-        raise ValueError("Must specify either n_days or n_candles")raise ValueError("Must specify either n_days or n_candles")
+        raise ValueError("Must specify either n_days or n_candles")
 
 
 def load_latest_candles_from_dir(
@@ -599,7 +603,7 @@ def load_latest_candles_from_dir(
             raise ValueError(f"Insufficient data: need {n_candles} candles, got {len(combined)}")
         return combined.tail(n_candles)
     else:
-        raise ValueError("Must specify either n_days or n_candles")raise ValueError("Must specify either n_days or n_candles")
+        raise ValueError("Must specify either n_days or n_candles")
 
 
 if __name__ == "__main__":

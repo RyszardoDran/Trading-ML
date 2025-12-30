@@ -877,6 +877,7 @@ def save_model_artifacts(
     min_precision: float | None = None,
     min_recall: float | None = None,
     threshold_strategy: str | None = None,
+    feature_version: str | None = None,
 ) -> None:
     """Save trained model and artifacts to disk.
     
@@ -917,5 +918,6 @@ def save_model_artifacts(
         min_precision=min_precision,
         min_recall=min_recall,
         threshold_strategy=threshold_strategy,
+        feature_version=feature_version,
     )
     logger.info(f"Artifacts saved to {models_dir}")
