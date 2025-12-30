@@ -22,9 +22,10 @@ def split_sequences(
     X: np.ndarray,
     y: np.ndarray,
     timestamps: pd.DatetimeIndex,
-    train_until: str = "2022-12-31 23:59:00",
-    val_until: str = "2023-12-31 23:59:00",
-    test_until: str = "2024-12-31 23:59:00",
+    train_until: str = "2023-12-31 23:59:00",
+    val_until: str = "2024-06-30 23:59:00",
+    test_until: str = "2025-12-31 23:59:00",
+    gap_days: int = 7,  # Dodaj gap w dniach między splitami, aby uniknąć data leakage
 ) -> Tuple[
     np.ndarray,
     np.ndarray,
@@ -45,6 +46,7 @@ def split_sequences(
         train_until: End of train period
         val_until: End of validation period
         test_until: End of test period
+        gap_days: Number of days to skip between splits to prevent data leakage
 
     Returns:
         X_train, X_val, X_test, y_train, y_val, y_test, timestamps_train, timestamps_val, timestamps_test
@@ -56,9 +58,13 @@ def split_sequences(
     val_end = pd.Timestamp(val_until)
     test_end = pd.Timestamp(test_until)
 
+    # Dodaj gap między splitami
+    val_start = train_end + pd.Timedelta(days=gap_days)
+    test_start = val_end + pd.Timedelta(days=gap_days)
+
     train_mask = timestamps <= train_end
-    val_mask = (timestamps > train_end) & (timestamps <= val_end)
-    test_mask = (timestamps > val_end) & (timestamps <= test_end)
+    val_mask = (timestamps > val_start) & (timestamps <= val_end)
+    test_mask = (timestamps > test_start) & (timestamps <= test_end)
 
     X_train, y_train = X[train_mask], y[train_mask]
     X_val, y_val = X[val_mask], y[val_mask]

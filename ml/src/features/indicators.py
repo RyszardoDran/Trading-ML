@@ -300,20 +300,9 @@ def compute_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
     Returns:
         OBV values (cumulative)
     """
-    obv = pd.Series(0.0, index=close.index)
-    obv_val = 0.0
-    
-    for i in range(len(close)):
-        if i == 0:
-            obv_val = 0.0
-        elif close.iloc[i] > close.iloc[i - 1]:
-            obv_val += volume.iloc[i]
-        elif close.iloc[i] < close.iloc[i - 1]:
-            obv_val -= volume.iloc[i]
-        # If close == close, OBV stays same
-        
-        obv.iloc[i] = obv_val
-    
+    # Vectorized OBV: cumulative sum of signed volume changes
+    ret = close.diff()
+    obv = (np.sign(ret).fillna(0) * volume).cumsum()
     return obv
 
 

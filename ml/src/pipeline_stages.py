@@ -113,7 +113,7 @@ def validate_sequence_boundaries(
     train_end_idx: int,
     val_end_idx: int,
     window_size: int,
-) -> None:
+) -> list[int]:
     """Validate that sequences don't cross train/val/test boundaries.
     
     **PURPOSE**: Prevent data leakage where sequences span across temporal splits.
@@ -126,44 +126,51 @@ def validate_sequence_boundaries(
         val_end_idx: Last index of validation set  
         window_size: Number of candles per sequence
         
+    Returns:
+        List of sequence indices that cross boundaries and should be removed
+        
     Notes:
-        - Logs warnings if sequences cross boundaries
+        - Returns indices of sequences to remove to prevent data leakage
         - Critical for time series validation integrity
         
     Examples:
-        >>> validate_sequence_boundaries(timestamps, 1000, 1200, 100)
-        ⚠️  5 sequences cross train/val boundary
-        ⚠️  3 sequences cross val/test boundary
+        >>> to_remove = validate_sequence_boundaries(timestamps, 1000, 1200, 100)
+        >>> if to_remove:
+        ...     # Remove crossing sequences
+        ...     X = np.delete(X, to_remove, axis=0)
+        ...     y = np.delete(y, to_remove, axis=0)
+        ...     timestamps = timestamps.delete(to_remove)
     """
     # Check sequences that might cross train/val boundary
-    train_boundary_crossings = 0
+    train_boundary_crossings = []
     for i in range(max(0, train_end_idx - window_size + 1), min(train_end_idx + 1, len(timestamps))):
         seq_start = timestamps[i] if i < len(timestamps) else None
         seq_end = timestamps[min(i + window_size - 1, len(timestamps) - 1)] if i < len(timestamps) else None
         if seq_start is not None and seq_end is not None:
-            # If sequence spans the boundary, count it
+            # If sequence spans the boundary, mark for removal
             if i <= train_end_idx < i + window_size - 1:
-                train_boundary_crossings += 1
+                train_boundary_crossings.append(i)
     
     # Check sequences that might cross val/test boundary  
-    val_boundary_crossings = 0
+    val_boundary_crossings = []
     for i in range(max(0, val_end_idx - window_size + 1), min(val_end_idx + 1, len(timestamps))):
         seq_start = timestamps[i] if i < len(timestamps) else None
         seq_end = timestamps[min(i + window_size - 1, len(timestamps) - 1)] if i < len(timestamps) else None
         if seq_start is not None and seq_end is not None:
-            # If sequence spans the boundary, count it
+            # If sequence spans the boundary, mark for removal
             if i <= val_end_idx < i + window_size - 1:
-                val_boundary_crossings += 1
+                val_boundary_crossings.append(i)
     
-    if train_boundary_crossings > 0:
-        logger.warning(f"⚠️  {train_boundary_crossings} sequences cross train/val boundary (potential data leakage)")
-    if val_boundary_crossings > 0:
-        logger.warning(f"⚠️  {val_boundary_crossings} sequences cross val/test boundary (potential data leakage)")
+    # Combine all crossing sequences
+    to_remove = sorted(set(train_boundary_crossings + val_boundary_crossings))
     
-    if train_boundary_crossings == 0 and val_boundary_crossings == 0:
-        logger.info("✅ No sequences cross temporal boundaries")
+    if to_remove:
+        logger.warning(f"⚠️  {len(to_remove)} sequences cross temporal boundaries (potential data leakage)")
+        logger.warning(f"   Removing {len(to_remove)} sequences to prevent data leakage")
     else:
-        logger.warning("   Consider removing boundary-crossing sequences to prevent data leakage")
+        logger.info("✅ No sequences cross temporal boundaries")
+    
+    return to_remove
 
 
 def load_and_prepare_data(
@@ -667,7 +674,36 @@ def split_and_scale_stage(
         train_end_idx = len(X_train) - 1
         val_end_idx = len(X_train) + len(X_val) - 1
         # Use explicit window_size (in M5 candles) passed into this stage
-        validate_sequence_boundaries(timestamps, train_end_idx, val_end_idx, window_size)
+        to_remove = validate_sequence_boundaries(timestamps, train_end_idx, val_end_idx, window_size)
+        
+        # Remove boundary-crossing sequences if any
+        if to_remove:
+            logger.info(f"Removing {len(to_remove)} boundary-crossing sequences...")
+            # Create mask for sequences to keep
+            keep_mask = np.ones(len(X), dtype=bool)
+            keep_mask[to_remove] = False
+            
+            # Apply mask to all arrays
+            X = X[keep_mask]
+            y = y[keep_mask]
+            timestamps = timestamps[keep_mask]
+            
+            # Re-split after removing sequences
+            if year_filter is not None:
+                n = len(X)
+                train_idx = int(0.7 * n)
+                val_idx = int(0.85 * n)
+                X_train, y_train = X[:train_idx], y[:train_idx]
+                X_val, y_val = X[train_idx:val_idx], y[train_idx:val_idx]
+                X_test, y_test = X[val_idx:], y[val_idx:]
+                ts_train = timestamps[:train_idx]
+                ts_val = timestamps[train_idx:val_idx]
+                ts_test = timestamps[val_idx:]
+            else:
+                (X_train, X_val, X_test, y_train, y_val, y_test, ts_train, ts_val, ts_test) = \
+                    split_sequences(X, y, timestamps)
+            
+            logger.info(f"After removal: train={len(X_train):,}, val={len(X_val):,}, test={len(X_test):,}")
         
         # CRITICAL: Fit scaler ONLY on training data
         logger.info("Scaling features with RobustScaler (robust to outliers)...")

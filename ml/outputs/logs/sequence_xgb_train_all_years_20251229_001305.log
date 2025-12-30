@@ -27,3 +27,66 @@ Pipeline Configuration:
 2025-12-29 00:13:05 - __main__ - INFO - ================================================================================
 
 2025-12-29 00:13:05 - ml.src.pipeline_stages - INFO - Loading data from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-29 00:13:21 - ml.src.pipeline_stages - INFO - Loaded 6,529,676 rows from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-29 00:13:21 - ml.src.pipeline_stages - INFO - Date range: 2004-06-11 07:18:00 to 2025-11-28 19:43:00
+2025-12-29 00:13:21 - ml.src.pipeline_stages - WARNING - window_size parameter is deprecated and ignored (passed: 80)
+2025-12-29 00:13:21 - ml.src.pipeline_stages - WARNING - feature_version parameter is deprecated and ignored (passed: v1)
+2025-12-29 00:13:21 - ml.src.pipeline_stages - INFO - Aggregating M1 data to M5 timeframe...
+2025-12-29 00:13:21 - ml.src.features.engineer_m5 - INFO - Aggregating 6529676 M1 candles to M5...
+2025-12-29 00:13:24 - ml.src.features.engineer_m5 - INFO - Aggregated to 1391416 M5 candles (4.7x compression)
+2025-12-29 00:13:24 - ml.src.pipeline_stages - INFO - Aggregated 6,529,676 M1 candles → 1,391,416 M5 candles (21.3% compression)
+2025-12-29 00:13:24 - ml.src.pipeline_stages - INFO - Engineering technical features on M5 timeframe (with M15/M60 context)...
+2025-12-29 00:13:24 - ml.src.features.engineer_m5 - INFO - Engineering M5 features...
+2025-12-29 00:13:24 - ml.src.features.engineer_m5 - INFO - Aggregating 1391416 M1 candles to M5...
+2025-12-29 00:13:24 - ml.src.features.engineer_m5 - INFO - Aggregated to 1391416 M5 candles (1.0x compression)
+2025-12-29 00:13:24 - ml.src.features.engineer_m5 - INFO - Computing M5 primary features...
+2025-12-29 00:14:52 - ml.src.features.engineer_m5 - INFO - Computing M15 context from M5...
+2025-12-29 00:15:21 - ml.src.features.engineer_m5 - INFO - Computing M60 context from M5...
+2025-12-29 00:15:38 - ml.src.features.engineer_m5 - INFO - M5 feature engineering complete: 1391413 rows × 28 features
+2025-12-29 00:15:38 - ml.src.features.engineer_m5 - INFO - Timeframe: M5 (5-minute candles)
+2025-12-29 00:15:38 - ml.src.features.engineer_m5 - INFO - Date range: 2004-06-11 07:30:00 to 2025-11-28 19:40:00
+2025-12-29 00:15:38 - ml.src.pipeline_stages - INFO - Features shape: (1391413, 28)
+2025-12-29 00:15:38 - ml.src.pipeline_stages - INFO - Feature columns: 28
+2025-12-29 00:15:39 - ml.src.features.engineer_m5 - INFO - Aggregating 6529666 M1 candles to M5...
+2025-12-29 00:15:41 - ml.src.features.engineer_m5 - INFO - Aggregated to 1391413 M5 candles (4.7x compression)
+2025-12-29 00:15:41 - ml.src.pipeline_stages - INFO - Creating targets on M5 timeframe (SL=1.0×ATR, TP=2.0×ATR, min_hold=3 M5 candles, max_horizon=60 M5 candles)
+2025-12-29 00:15:41 - ml.src.targets.target_maker - INFO - Creating targets (SL/TP simulation) for 1,391,413 candles...
+2025-12-29 00:15:41 - ml.src.targets.target_maker - INFO - Parameters: SL=1.0×ATR, TP=2.0×ATR, min_hold=3min, max_horizon=60min
+2025-12-29 00:15:41 - ml.src.targets.target_maker - INFO - No precomputed ATR column found; calculating ATR (14) on provided timeframe
+2025-12-29 00:15:42 - ml.src.targets.target_maker - INFO - Target creation complete: 1,391,353 valid targets
+2025-12-29 00:15:42 - ml.src.pipeline_stages - INFO - Targets shape: 1391353
+2025-12-29 00:15:42 - ml.src.pipeline_stages - INFO - Positive class (win): 498,235 (35.81%)
+2025-12-29 00:15:42 - ml.src.pipeline_stages - INFO - Negative class (loss): 893,118 (64.19%)
+2025-12-29 00:15:42 - ml.src.pipeline_stages - INFO - Creating sequences on M5 timeframe (window_size=80 M5 candles = 400 minutes)...
+2025-12-29 00:15:42 - ml.src.pipeline_stages - INFO - Filter config: m5_alignment=False (already M5), trend=True, pullback=False, max_windows=200,000
+2025-12-29 00:15:44 - ml.src.sequences.sequencer - INFO - M5 alignment filter disabled; keeping all timestamps irrespective of minute alignment
+2025-12-29 00:15:44 - ml.src.sequences.sequencer - INFO - Applied Trend Filter (dist_sma_200 > 0.00, ADX > 15.00): kept 675018/1391274 (48.5%)
+2025-12-29 00:15:44 - ml.src.sequences.sequencer - INFO - Pullback filter disabled; not constraining RSI_M5
+2025-12-29 00:15:44 - ml.src.sequences.sequencer - INFO - Session filter 'london_ny': keeping 421,207 / 1,391,274 windows (30.3%)
+2025-12-29 00:15:44 - ml.src.sequences.sequencer - WARNING - Too many windows (421,207) for memory safety. Capping to last 200,000 windows.
+2025-12-29 00:15:44 - ml.src.sequences.sequencer - INFO - After capping: 200,000 windows
+2025-12-29 00:15:45 - ml.src.pipeline_stages - INFO - Sequences created: X.shape=(200000, 2240), y.shape=(200000,)
+2025-12-29 00:15:45 - ml.src.pipeline_stages - INFO - Positive class in sequences: 69,570 (34.78%)
+2025-12-29 00:15:45 - ml.src.pipeline_stages - INFO - Using chronological 3-way split (train/val/test)...
+2025-12-29 00:15:47 - ml.src.pipeline_stages - INFO - Using fixed date split for full dataset
+2025-12-29 00:15:47 - ml.src.pipeline_stages - INFO - Split sizes: train=150,825, val=20,712, test=22,891
+2025-12-29 00:15:48 - ml.src.pipeline_stages - INFO - Class distribution validation:
+2025-12-29 00:15:48 - ml.src.pipeline_stages - INFO -   TRAIN: pos=52,701 (34.9%), neg=98,124 (65.1%)
+2025-12-29 00:15:48 - ml.src.pipeline_stages - INFO -   VAL: pos=6,761 (32.6%), neg=13,951 (67.4%)
+2025-12-29 00:15:48 - ml.src.pipeline_stages - INFO -   TEST: pos=8,191 (35.8%), neg=14,700 (64.2%)
+2025-12-29 00:15:48 - ml.src.pipeline_stages - INFO -   Max difference in positive class: 3.1% (tolerance: 10.0%)
+2025-12-29 00:15:48 - ml.src.pipeline_stages - INFO -   ✅ Class distributions are stable (max diff: 3.1% < 10.0%)
+2025-12-29 00:15:48 - ml.src.pipeline_stages - WARNING - ⚠️  79 sequences cross train/val boundary (potential data leakage)
+2025-12-29 00:15:48 - ml.src.pipeline_stages - WARNING - ⚠️  79 sequences cross val/test boundary (potential data leakage)
+2025-12-29 00:15:48 - ml.src.pipeline_stages - WARNING -    Consider removing boundary-crossing sequences to prevent data leakage
+2025-12-29 00:15:48 - ml.src.pipeline_stages - INFO - Scaling features with RobustScaler (robust to outliers)...
+2025-12-29 00:16:28 - ml.src.pipeline_stages - INFO - Feature scaling complete: mean=0.0161, std=0.7565
+2025-12-29 00:16:28 - ml.src.pipeline_stages - INFO - Training XGBoost model...
+2025-12-29 00:16:28 - ml.src.pipeline_stages - INFO - 
+[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...
+2025-12-29 00:16:28 - ml.src.pipeline_stages - INFO -   Sample weights: positive=3.0, negative=1.0
+2025-12-29 00:16:28 - ml.src.pipeline_stages - INFO -   Weight ratio (positive/negative): 3.00x
+2025-12-29 00:16:28 - ml.src.training.sequence_xgb_trainer - INFO - Class balance (train): pos=52,701, neg=98,124, imbalance_ratio=1.86
+2025-12-29 00:16:28 - ml.src.training.sequence_xgb_trainer - INFO - Applied scale_pos_weight=1.8619 to handle class imbalance
+2025-12-29 00:16:28 - ml.src.training.sequence_xgb_trainer - INFO - [POINT 1] Cost-Sensitive Learning: using sample weights (mean=1.6988)
+2025-12-29 00:16:28 - ml.src.training.sequence_xgb_trainer - INFO - Training XGBoost classifier...

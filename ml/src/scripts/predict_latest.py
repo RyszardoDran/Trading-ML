@@ -70,7 +70,8 @@ def main() -> None:
     # directory (i.e. `ml/src`). Use `parents[1]` so paths point to
     # `ml/src/models` and `ml/src/data` which exist in the repo layout.
     repo_root = Path(__file__).parents[1]
-    models_dir = repo_root / "models"
+    # Use canonical outputs models directory (trained artifacts saved by pipeline)
+    models_dir = repo_root.parent / "outputs" / "models"
     data_dir = repo_root / "data"
 
     # Load artifacts

@@ -1,0 +1,48 @@
+{
+  "timestamp": "2025-12-29T09:44:55.883392",
+  "model_info": {
+    "threshold": 0.6231677648425101,
+    "window_size": 60
+  },
+  "parameters": {
+    "initial_capital": 100000.0,
+    "max_trades_per_day": 30,
+    "backtest_period": {
+      "start": "2021-01-04T06:10:00",
+      "end": "2025-11-28T19:40:00",
+      "candles": 298944
+    }
+  },
+  "scenarios": {
+    "nominal": {
+      "total_return_pct": -2.3152142580412427,
+      "sharpe_ratio": -0.12708690674040876,
+      "win_rate_pct": 8.0,
+      "max_drawdown_pct": 2.315214258041247,
+      "num_trades": 25,
+      "final_equity": 97684.78574195875,
+      "annual_return_pct": -0.0019733904090688294,
+      "annual_volatility_pct": 0.015527881350513403
+    },
+    "stress_wide_spreads": {
+      "total_return_pct": -11.389913933614759,
+      "sharpe_ratio": -0.1443554440409916,
+      "win_rate_pct": 0.0,
+      "max_drawdown_pct": 11.389913933614764,
+      "num_trades": 25,
+      "final_equity": 88610.08606638524,
+      "annual_return_pct": -0.010168644895588008,
+      "annual_volatility_pct": 0.07044171394533959
+    },
+    "conservative_threshold": {
+      "total_return_pct": 0.0,
+      "sharpe_ratio": 0.0,
+      "win_rate_pct": 0.0,
+      "max_drawdown_pct": 0.0,
+      "num_trades": 0,
+      "final_equity": 100000.0,
+      "annual_return_pct": 0.0,
+      "annual_volatility_pct": 0.0
+    }
+  }
+}

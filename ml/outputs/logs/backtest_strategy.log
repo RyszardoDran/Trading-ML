@@ -1,0 +1,192 @@
+2025-12-29 09:05:05,590 - __main__ - INFO - Loading artifacts from ml\src\models
+2025-12-29 09:27:09,192 - __main__ - INFO - Loading artifacts from ml\outputs\models
+2025-12-29 09:28:37,577 - __main__ - INFO - Loading artifacts from ml\outputs\models
+2025-12-29 09:28:37,633 - __main__ - INFO - Loaded model from ml\outputs\models\sequence_xgb_model.pkl
+2025-12-29 09:28:37,634 - __main__ - INFO - Loaded scaler from ml\outputs\models\sequence_scaler.pkl
+2025-12-29 09:28:37,635 - __main__ - INFO - Loaded metadata: threshold=0.6232
+2025-12-29 09:28:37,635 - __main__ - ERROR - File not found: Data file not found: data\xauusd_20years.pkl
+2025-12-29 09:29:22,328 - __main__ - INFO - Loading artifacts from ml\outputs\models
+2025-12-29 09:29:22,405 - __main__ - INFO - Loaded model from ml\outputs\models\sequence_xgb_model.pkl
+2025-12-29 09:29:22,406 - __main__ - INFO - Loaded scaler from ml\outputs\models\sequence_scaler.pkl
+2025-12-29 09:29:22,407 - __main__ - INFO - Loaded metadata: threshold=0.6232
+2025-12-29 09:29:22,407 - __main__ - WARNING - Features not found at ml\outputs\backtest_features.pkl. Please provide pre-computed features for backtesting.
+2025-12-29 09:29:22,408 - __main__ - ERROR - File not found: Features file not found: ml\outputs\backtest_features.pkl
+2025-12-29 09:41:42,195 - __main__ - INFO - Loading artifacts from ml\outputs\models
+2025-12-29 09:41:42,256 - __main__ - INFO - Loaded model from ml\outputs\models\sequence_xgb_model.pkl
+2025-12-29 09:41:42,258 - __main__ - INFO - Loaded scaler from ml\outputs\models\sequence_scaler.pkl
+2025-12-29 09:41:42,259 - __main__ - INFO - Loaded metadata: threshold=0.6232
+2025-12-29 09:41:42,260 - __main__ - INFO - Loading pre-computed features from ml\outputs\backtest_features.pkl
+2025-12-29 09:41:42,537 - __main__ - INFO - Inferred prices/timestamps from features dict
+2025-12-29 09:41:42,537 - __main__ - INFO - Loaded features: shape=(299003, 28)
+2025-12-29 09:41:42,537 - __main__ - ERROR - Invalid data: Price/feature length mismatch: 299005 vs 299003
+2025-12-29 09:42:09,215 - __main__ - INFO - Loading artifacts from ml\outputs\models
+2025-12-29 09:42:09,275 - __main__ - INFO - Loaded model from ml\outputs\models\sequence_xgb_model.pkl
+2025-12-29 09:42:09,277 - __main__ - INFO - Loaded scaler from ml\outputs\models\sequence_scaler.pkl
+2025-12-29 09:42:09,277 - __main__ - INFO - Loaded metadata: threshold=0.6232
+2025-12-29 09:42:09,278 - __main__ - INFO - Loading pre-computed features from ml\outputs\backtest_features.pkl
+2025-12-29 09:42:09,541 - __main__ - INFO - Inferred prices/timestamps from features dict
+2025-12-29 09:42:09,542 - __main__ - INFO - Loaded features: shape=(299003, 28)
+2025-12-29 09:42:09,542 - __main__ - INFO - Running backtest scenarios...
+2025-12-29 09:42:09,572 - __main__ - ERROR - Invalid data: X has 28 features, but RobustScaler is expecting 1680 features as input.
+2025-12-29 09:42:36,334 - __main__ - INFO - Loading artifacts from ml\outputs\models
+2025-12-29 09:42:36,390 - __main__ - INFO - Loaded model from ml\outputs\models\sequence_xgb_model.pkl
+2025-12-29 09:42:36,391 - __main__ - INFO - Loaded scaler from ml\outputs\models\sequence_scaler.pkl
+2025-12-29 09:42:36,392 - __main__ - INFO - Loaded metadata: threshold=0.6232
+2025-12-29 09:42:36,393 - __main__ - INFO - Loading pre-computed features from ml\outputs\backtest_features.pkl
+2025-12-29 09:42:36,682 - __main__ - INFO - Inferred prices/timestamps from features dict
+2025-12-29 09:42:36,682 - __main__ - INFO - Loaded features: shape=(299003, 28)
+2025-12-29 09:42:36,682 - __main__ - INFO - Running backtest scenarios...
+2025-12-29 09:42:36,683 - __main__ - INFO - Building sequences: window_size=60, n_features=28
+2025-12-29 09:44:27,591 - __main__ - INFO - Signal generation: 25 signals with threshold=0.6232
+2025-12-29 09:44:27,639 - __main__ - INFO - 
+======================================================================
+2025-12-29 09:44:27,641 - __main__ - INFO - SCENARIO 1: Nominal (base case)
+2025-12-29 09:44:27,641 - __main__ - INFO - ======================================================================
+2025-12-29 09:44:27,646 - __main__ - INFO - Simulating trading strategy...
+2025-12-29 09:44:37,109 - __main__ - INFO - Total signals: 25, Executed trades: 25
+2025-12-29 09:44:37,448 - __main__ - INFO - ✅ Simulation complete!
+2025-12-29 09:44:37,452 - __main__ - INFO -    Trades: 25, Win rate: 8.00%
+2025-12-29 09:44:37,452 - __main__ - INFO -    Return: -2.32%, Sharpe: -0.1271
+2025-12-29 09:44:37,457 - __main__ - INFO - 
+======================================================================
+2025-12-29 09:44:37,457 - __main__ - INFO - SCENARIO 2: Stress (wider spreads)
+2025-12-29 09:44:37,457 - __main__ - INFO - ======================================================================
+2025-12-29 09:44:37,458 - __main__ - INFO - Simulating trading strategy...
+2025-12-29 09:44:45,051 - __main__ - INFO - Total signals: 25, Executed trades: 25
+2025-12-29 09:44:45,487 - __main__ - INFO - ✅ Simulation complete!
+2025-12-29 09:44:45,488 - __main__ - INFO -    Trades: 25, Win rate: 0.00%
+2025-12-29 09:44:45,488 - __main__ - INFO -    Return: -11.39%, Sharpe: -0.1444
+2025-12-29 09:44:45,493 - __main__ - INFO - 
+======================================================================
+2025-12-29 09:44:45,494 - __main__ - INFO - SCENARIO 3: Conservative (higher threshold)
+2025-12-29 09:44:45,495 - __main__ - INFO - ======================================================================
+2025-12-29 09:44:45,497 - __main__ - INFO - Conservative threshold: 0.7232
+2025-12-29 09:44:45,497 - __main__ - INFO - Simulating trading strategy...
+2025-12-29 09:44:55,531 - __main__ - INFO - Total signals: 0, Executed trades: 0
+2025-12-29 09:44:55,874 - __main__ - INFO - ✅ Simulation complete!
+2025-12-29 09:44:55,874 - __main__ - INFO -    Trades: 0, Win rate: 0.00%
+2025-12-29 09:44:55,875 - __main__ - INFO -    Return: 0.00%, Sharpe: 0.0000
+2025-12-29 09:44:56,607 - __main__ - INFO - ✅ Backtest results saved to ml\outputs\backtest_2025\backtest_results_20251229_094456.json
+2025-12-29 09:44:56,608 - __main__ - INFO - ======================================================================
+2025-12-29 09:44:56,608 - __main__ - INFO - BACKTEST RESULTS SUMMARY
+2025-12-29 09:44:56,609 - __main__ - INFO - ======================================================================
+2025-12-29 09:44:56,609 - __main__ - INFO - 
+NOMINAL:
+2025-12-29 09:44:56,609 - __main__ - INFO -   Total Return:       -2.32%
+2025-12-29 09:44:56,609 - __main__ - INFO -   Sharpe Ratio:     -0.1271
+2025-12-29 09:44:56,610 - __main__ - INFO -   Win Rate:            8.00%
+2025-12-29 09:44:56,610 - __main__ - INFO -   Max Drawdown:        2.32%
+2025-12-29 09:44:56,610 - __main__ - INFO -   Num Trades:            25
+2025-12-29 09:44:56,611 - __main__ - INFO -   Final Equity:           97,685
+2025-12-29 09:44:56,612 - __main__ - INFO - 
+STRESS_WIDE_SPREADS:
+2025-12-29 09:44:56,613 - __main__ - INFO -   Total Return:      -11.39%
+2025-12-29 09:44:56,614 - __main__ - INFO -   Sharpe Ratio:     -0.1444
+2025-12-29 09:44:56,614 - __main__ - INFO -   Win Rate:            0.00%
+2025-12-29 09:44:56,615 - __main__ - INFO -   Max Drawdown:       11.39%
+2025-12-29 09:44:56,615 - __main__ - INFO -   Num Trades:            25
+2025-12-29 09:44:56,615 - __main__ - INFO -   Final Equity:           88,610
+2025-12-29 09:44:56,616 - __main__ - INFO - 
+CONSERVATIVE_THRESHOLD:
+2025-12-29 09:44:56,616 - __main__ - INFO -   Total Return:        0.00%
+2025-12-29 09:44:56,617 - __main__ - INFO -   Sharpe Ratio:      0.0000
+2025-12-29 09:44:56,617 - __main__ - INFO -   Win Rate:            0.00%
+2025-12-29 09:44:56,617 - __main__ - INFO -   Max Drawdown:        0.00%
+2025-12-29 09:44:56,617 - __main__ - INFO -   Num Trades:             0
+2025-12-29 09:44:56,618 - __main__ - INFO -   Final Equity:          100,000
+2025-12-29 09:44:56,618 - __main__ - INFO - ======================================================================
+2025-12-29 09:44:56,620 - __main__ - INFO - ✅ Backtest completed successfully!
+2025-12-29 09:44:56,620 - __main__ - INFO - 📊 Results saved to: ml\outputs\backtest_2025\backtest_results_20251229_094456.json
+2025-12-29 09:45:19,118 - __main__ - INFO - Loading artifacts from ml\outputs\models
+2025-12-29 09:45:19,227 - __main__ - INFO - Loaded model from ml\outputs\models\sequence_xgb_model.pkl
+2025-12-29 09:45:19,228 - __main__ - INFO - Loaded scaler from ml\outputs\models\sequence_scaler.pkl
+2025-12-29 09:45:19,229 - __main__ - INFO - Loaded metadata: threshold=0.6232
+2025-12-29 09:45:19,230 - __main__ - INFO - Loading pre-computed features from ml\outputs\backtest_features.pkl
+2025-12-29 09:45:19,515 - __main__ - INFO - Inferred prices/timestamps from features dict
+2025-12-29 09:45:19,515 - __main__ - INFO - Loaded features: shape=(299003, 28)
+2025-12-29 09:45:19,515 - __main__ - INFO - Running backtest scenarios...
+2025-12-29 09:45:19,516 - __main__ - INFO - Building sequences: window_size=60, n_features=28
+2025-12-29 09:46:19,683 - __main__ - INFO - Signal generation: 25 signals with threshold=0.6232
+2025-12-29 09:46:19,796 - __main__ - INFO - 
+======================================================================
+2025-12-29 09:46:19,799 - __main__ - INFO - SCENARIO 1: Nominal (base case)
+2025-12-29 09:46:19,799 - __main__ - INFO - ======================================================================
+2025-12-29 09:46:19,802 - __main__ - INFO - Simulating trading strategy...
+2025-12-29 09:46:32,588 - __main__ - INFO - Total signals: 25, Executed trades: 25
+2025-12-29 09:46:32,949 - __main__ - INFO - ✅ Simulation complete!
+2025-12-29 09:46:32,954 - __main__ - INFO -    Trades: 25, Win rate: 8.00%
+2025-12-29 09:46:32,954 - __main__ - INFO -    Return: -2.32%, Sharpe: -0.1271
+2025-12-29 09:46:32,961 - __main__ - INFO - 
+======================================================================
+2025-12-29 09:46:32,963 - __main__ - INFO - SCENARIO 2: Stress (wider spreads)
+2025-12-29 09:46:32,963 - __main__ - INFO - ======================================================================
+2025-12-29 09:46:32,963 - __main__ - INFO - Simulating trading strategy...
+2025-12-29 09:46:40,665 - __main__ - INFO - Total signals: 25, Executed trades: 25
+2025-12-29 09:46:40,939 - __main__ - INFO - ✅ Simulation complete!
+2025-12-29 09:46:40,941 - __main__ - INFO -    Trades: 25, Win rate: 0.00%
+2025-12-29 09:46:40,941 - __main__ - INFO -    Return: -11.39%, Sharpe: -0.1444
+2025-12-29 09:46:40,945 - __main__ - INFO - 
+======================================================================
+2025-12-29 09:46:40,946 - __main__ - INFO - SCENARIO 3: Conservative (higher threshold)
+2025-12-29 09:46:40,947 - __main__ - INFO - ======================================================================
+2025-12-29 09:46:40,950 - __main__ - INFO - Conservative threshold: 0.7232
+2025-12-29 09:46:40,951 - __main__ - INFO - Simulating trading strategy...
+2025-12-29 09:46:49,163 - __main__ - INFO - Total signals: 0, Executed trades: 0
+2025-12-29 09:46:49,417 - __main__ - INFO - ✅ Simulation complete!
+2025-12-29 09:46:49,417 - __main__ - INFO -    Trades: 0, Win rate: 0.00%
+2025-12-29 09:46:49,418 - __main__ - INFO -    Return: 0.00%, Sharpe: 0.0000
+2025-12-29 09:46:50,255 - __main__ - INFO - ✅ Backtest results saved to ml\outputs\backtest_2025\backtest_results_20251229_094650.json
+2025-12-29 09:46:50,256 - __main__ - INFO - ======================================================================
+2025-12-29 09:46:50,257 - __main__ - INFO - BACKTEST RESULTS SUMMARY
+2025-12-29 09:46:50,257 - __main__ - INFO - ======================================================================
+2025-12-29 09:46:50,257 - __main__ - INFO - 
+NOMINAL:
+2025-12-29 09:46:50,258 - __main__ - INFO -   Total Return:       -2.32%
+2025-12-29 09:46:50,258 - __main__ - INFO -   Sharpe Ratio:     -0.1271
+2025-12-29 09:46:50,259 - __main__ - INFO -   Win Rate:            8.00%
+2025-12-29 09:46:50,259 - __main__ - INFO -   Max Drawdown:        2.32%
+2025-12-29 09:46:50,259 - __main__ - INFO -   Num Trades:            25
+2025-12-29 09:46:50,260 - __main__ - INFO -   Final Equity:           97,685
+2025-12-29 09:46:50,260 - __main__ - INFO - 
+STRESS_WIDE_SPREADS:
+2025-12-29 09:46:50,261 - __main__ - INFO -   Total Return:      -11.39%
+2025-12-29 09:46:50,261 - __main__ - INFO -   Sharpe Ratio:     -0.1444
+2025-12-29 09:46:50,262 - __main__ - INFO -   Win Rate:            0.00%
+2025-12-29 09:46:50,262 - __main__ - INFO -   Max Drawdown:       11.39%
+2025-12-29 09:46:50,262 - __main__ - INFO -   Num Trades:            25
+2025-12-29 09:46:50,263 - __main__ - INFO -   Final Equity:           88,610
+2025-12-29 09:46:50,263 - __main__ - INFO - 
+CONSERVATIVE_THRESHOLD:
+2025-12-29 09:46:50,264 - __main__ - INFO -   Total Return:        0.00%
+2025-12-29 09:46:50,264 - __main__ - INFO -   Sharpe Ratio:      0.0000
+2025-12-29 09:46:50,264 - __main__ - INFO -   Win Rate:            0.00%
+2025-12-29 09:46:50,265 - __main__ - INFO -   Max Drawdown:        0.00%
+2025-12-29 09:46:50,265 - __main__ - INFO -   Num Trades:             0
+2025-12-29 09:46:50,266 - __main__ - INFO -   Final Equity:          100,000
+2025-12-29 09:46:50,266 - __main__ - INFO - ======================================================================
+2025-12-29 09:46:50,268 - __main__ - INFO - ✅ Backtest completed successfully!
+2025-12-29 09:46:50,268 - __main__ - INFO - 📊 Results saved to: ml\outputs\backtest_2025\backtest_results_20251229_094650.json
+2025-12-29 09:55:35,195 - __main__ - INFO - Loading artifacts from ml\outputs\models
+2025-12-29 09:55:35,304 - __main__ - INFO - Loaded model from ml\outputs\models\sequence_xgb_model.pkl
+2025-12-29 09:55:35,305 - __main__ - INFO - Loaded scaler from ml\outputs\models\sequence_scaler.pkl
+2025-12-29 09:55:35,306 - __main__ - INFO - Loaded metadata: threshold=0.6232
+2025-12-29 09:55:35,307 - __main__ - INFO - Loading pre-computed features from ml\outputs\backtest_features.pkl
+2025-12-29 09:55:35,715 - __main__ - INFO - Inferred prices/timestamps from features dict
+2025-12-29 09:55:35,715 - __main__ - INFO - Loaded features: shape=(299003, 28)
+2025-12-29 09:55:35,715 - __main__ - INFO - Running backtest scenarios...
+2025-12-29 09:55:35,716 - __main__ - INFO - Building sequences: window_size=60, n_features=28
+2025-12-29 09:57:21,747 - __main__ - INFO - Signal generation: 25 signals with threshold=0.6232
+2025-12-29 09:57:21,789 - __main__ - INFO - 
+======================================================================
+2025-12-29 09:57:21,789 - __main__ - INFO - SCENARIO 1: Nominal (base case)
+2025-12-29 09:57:21,790 - __main__ - INFO - ======================================================================
+2025-12-29 09:57:21,793 - __main__ - INFO - Simulating trading strategy...
+2025-12-29 09:57:32,173 - __main__ - INFO - Total signals: 25, Executed trades: 25
+2025-12-29 09:57:32,484 - __main__ - INFO - ✅ Simulation complete!
+2025-12-29 09:57:32,489 - __main__ - INFO -    Trades: 25, Win rate: 8.00%
+2025-12-29 09:57:32,489 - __main__ - INFO -    Return: -2.32%, Sharpe: -0.1271
+2025-12-29 09:57:32,495 - __main__ - INFO - 
+======================================================================
+2025-12-29 09:57:32,495 - __main__ - INFO - SCENARIO 2: Stress (wider spreads)
+2025-12-29 09:57:32,496 - __main__ - INFO - ======================================================================
+2025-12-29 09:57:32,496 - __main__ - INFO - Simulating trading strategy...

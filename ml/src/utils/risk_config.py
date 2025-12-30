@@ -12,24 +12,24 @@ SL_ATR_MULTIPLIER: float = 1.0
 TP_ATR_MULTIPLIER: float = 2.0
 
 # ===== Model Threshold Parameters =====
-MIN_PRECISION_THRESHOLD: float = 0.6
+MIN_PRECISION_THRESHOLD: float = 0.65  # Rozluźniony, by pozwolić na więcej sygnałów (więcej trade'ów)
 MIN_TRADES_PER_TEST: int = 5         # Minimalna liczba transakcji w teście, aby uznać model za wiarygodny
-MAX_TRADES_PER_DAY: int = 15          # Limit transakcji na dzień (zapobiega overtradingowi)
+MAX_TRADES_PER_DAY: int = 30          # Podwyższony limit by pozwolić modelowi wysyłać więcej sygnałów w real-live
 
 # ===== Threshold Optimization Strategy =====
-USE_EV_OPTIMIZATION: bool = False     # Domyślnie F1-optimized (lepsze wyniki), EV optional dla advanced users
+USE_EV_OPTIMIZATION: bool = True     # Domyślnie F1-optimized; EV enabled to explore profit-driven thresholds
 USE_HYBRID_OPTIMIZATION: bool = True  # Hybryda: EV-optimized ale z precision AND recall floors (REKOMENDOWANE)
 # CAP-FIRST DEFAULT:
 # When MAX_TRADES_PER_DAY is active, a high recall floor can become infeasible and
 # forces threshold selection into fallbacks. We default to no recall floor and
 # let the daily cap control trade frequency.
-MIN_RECALL_FLOOR: float = 0.0
+MIN_RECALL_FLOOR: float = 0.35  # Zapewnij minimalny recall (więcej sygnałów), ale nie za wysoki aby uniknąć infeasibility
 EV_WIN_COEFFICIENT: float = 1.0       # Mnożnik dla True Positives (wygrane transakcje)
 EV_LOSS_COEFFICIENT: float = -1.0     # Mnożnik dla False Positives (przegrane transakcje)
 
 # ===== Cost-Sensitive Learning (POINT 1) =====
 USE_COST_SENSITIVE_LEARNING: bool = True  # Waży błędy: False Positives bardziej "kosztowne" niż False Negatives
-SAMPLE_WEIGHT_POSITIVE: float = 3.0   # Waga dla True Positives (poprawne predykcje dostają więcej "głosu")
+SAMPLE_WEIGHT_POSITIVE: float = 2.0   # Zmniejszona waga pozytywów by zwiększyć recall (więcej trade'ów)
 SAMPLE_WEIGHT_NEGATIVE: float = 1.0   # Waga dla True Negatives (baseline)
 
 # ===== Target (SL/TP) Simulation Parameters =====
@@ -37,7 +37,7 @@ MIN_HOLD_M5_CANDLES: int = 3           # Minimalny czas: 2 świece M5 = 10 minut
 MAX_HORIZON_M5_CANDLES: int = 60       # Maksymalny czas czekania: 60 świec M5 = 300 minut (5 godzin)
 
 # ===== Sequence Parameters =====
-WINDOW_SIZE: int = 80                # Liczba poprzednich świec (M5) jako wejście dla modelu
+WINDOW_SIZE: int = 60                # Skrócony window by szybciej wykrywać setups i wygenerować więcej próbek
 
 # ===== Trading Filters =====
 ENABLE_M5_ALIGNMENT: bool = False      # M5 candle close alignment
@@ -54,18 +54,18 @@ PULLBACK_MAX_RSI_M5: float = 75.0
 # ===== MARKET REGIME FILTER (AUDIT 4) =====
 # Gating: Only trade in favorable market conditions (high-ATR + trending markets)
 # Implementation based on Audit 4 findings: ATR dominates performance (r=0.82)
-ENABLE_REGIME_FILTER: bool = True      # Enable market regime gating (skip bad setups)
+ENABLE_REGIME_FILTER: bool = False     # Disabled: allow all regimes for backtesting/live (user request)
 
 # Regime classification thresholds
-REGIME_MIN_ATR_FOR_TRADING: float = 12.0       # TIER 2+ (avoid TIER 3: ATR < 12)
+REGIME_MIN_ATR_FOR_TRADING: float = 8.0       # Rozluźnione, by nie odrzucać umiarkowanie niskiej zmienności
                                                # Fold 9 (88%): ATR=20, Fold 11 (61.9%): ATR=16
                                                # Fold 2 (0%): ATR=8 → SKIP
 
-REGIME_MIN_ADX_FOR_TRENDING: float = 12.0      # Threshold to confirm trend (ADX < 12 = ranging)
+REGIME_MIN_ADX_FOR_TRENDING: float = 8.0      # Lower ADX threshold to allow more trending detections
                                                # Fold 9: ADX=20+, Fold 11: ADX=16
                                                # Fold 2: ADX=8 → SKIP
 
-REGIME_MIN_PRICE_DIST_SMA200: float = 5.0      # Price must be 5+ pips above SMA200
+REGIME_MIN_PRICE_DIST_SMA200: float = 0.0      # Allow setups closer to SMA200 (więcej sygnałów)
                                                # Fold 9: +30 pips above, Fold 11: +20 pips
                                                # Fold 2: ~0 pips (flat) → SKIP
 

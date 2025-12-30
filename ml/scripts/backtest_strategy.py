@@ -41,15 +41,19 @@ import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.preprocessing import RobustScaler
 
-# Configure logging
+# Ensure log directory exists and configure logging with UTF-8 file encoding
+log_dir = Path("ml/outputs/logs")
+log_dir.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler(
-            Path("ml/outputs/logs/backtest_strategy.log"),
+            log_dir / "backtest_strategy.log",
             mode="a",
+            encoding="utf-8",
         ),
     ],
 )
@@ -78,7 +82,7 @@ def load_model_artifacts(
         raise FileNotFoundError(f"Model file not found: {model_path}")
     with open(model_path, "rb") as f:
         model = pickle.load(f)
-    logger.info(f"✅ Loaded model from {model_path}")
+    logger.info(f"Loaded model from {model_path}")
 
     # Load scaler
     scaler_path = models_dir / "sequence_scaler.pkl"
@@ -86,7 +90,7 @@ def load_model_artifacts(
         raise FileNotFoundError(f"Scaler file not found: {scaler_path}")
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
-    logger.info(f"✅ Loaded scaler from {scaler_path}")
+    logger.info(f"Loaded scaler from {scaler_path}")
 
     # Load metadata
     metadata_path = models_dir / "sequence_threshold.json"
@@ -94,7 +98,11 @@ def load_model_artifacts(
         raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
     with open(metadata_path, "r", encoding="utf-8") as f:
         metadata = json.load(f)
-    logger.info(f"✅ Loaded metadata: threshold={metadata.get('threshold'):.4f}")
+    thr = metadata.get('threshold')
+    if thr is None:
+        logger.info("Loaded metadata (no threshold found)")
+    else:
+        logger.info(f"Loaded metadata: threshold={thr:.4f}")
 
     return model, scaler, metadata
 
@@ -277,6 +285,28 @@ def backtest_scenarios(
         Dictionary with results for each scenario
     """
     logger.info("Running backtest scenarios...")
+    # If features are per-bar (n_features small) but model expects flattened sequences,
+    # build sliding-window sequences using metadata.window_size
+    expected_in = getattr(scaler, 'n_features_in_', None)
+    if expected_in is not None and features.ndim == 2 and features.shape[1] != expected_in:
+        # Try to infer window_size
+        window_size = int(metadata.get('window_size', 60))
+        n_feat = features.shape[1]
+        if n_feat * window_size == expected_in:
+            logger.info(f"Building sequences: window_size={window_size}, n_features={n_feat}")
+            # number of sequences
+            num_seq = features.shape[0] - window_size + 1
+            if num_seq <= 0:
+                raise ValueError("Not enough feature rows to build sequences for backtest")
+            seq_X = np.lib.stride_tricks.sliding_window_view(features, window_size, axis=0)
+            # seq_X shape: (num_seq, window_size, n_feat) -> reshape to (num_seq, window_size*n_feat)
+            seq_X = seq_X.reshape((seq_X.shape[0], window_size * n_feat))
+            features = seq_X
+            # align prices/timestamps to sequence last index
+            prices = prices[window_size - 1 :]
+            timestamps = timestamps[window_size - 1 :]
+        else:
+            raise ValueError(f"Feature count {features.shape[1]} incompatible with scaler expecting {expected_in} inputs")
 
     # Scale features
     features_scaled = scaler.transform(features)
@@ -465,25 +495,82 @@ Examples:
     args = parser.parse_args()
 
     try:
+        # Resolve model directory (fallback to common locations)
+        model_dir = args.model_path
+        if not model_dir.exists():
+            candidates = [Path("ml/outputs/models"), Path("ml/src/models")]
+            found = None
+            for c in candidates:
+                if c.exists():
+                    found = c
+                    break
+            if found:
+                logger.warning(f"Model path {model_dir} not found; using {found} instead")
+                model_dir = found
+            else:
+                logger.info(f"Model path {model_dir} does not exist and no fallback found")
+
         # Load artifacts
-        model, scaler, metadata = load_model_artifacts(args.model_path)
+        model, scaler, metadata = load_model_artifacts(model_dir)
 
-        # Load historical data
-        df, timestamps = load_historical_data(args.data_path)
-        prices = df["Close"].values
+        # Load historical data or infer from features
+        prices = None
+        timestamps = None
+        features = None
 
-        # Load or generate features
+        if args.data_path.exists():
+            df, timestamps = load_historical_data(args.data_path)
+            prices = df["Close"].values
+
+        # Load or generate features (required)
         if args.features_path.exists():
             logger.info(f"Loading pre-computed features from {args.features_path}")
             with open(args.features_path, "rb") as f:
-                features = pickle.load(f)
-            logger.info(f"✅ Loaded features: shape={features.shape}")
+                features_obj = pickle.load(f)
+
+            # Try to infer prices/timestamps if data file was not provided
+            if prices is None:
+                # features_obj may be a dict with auxiliary data
+                if isinstance(features_obj, dict):
+                    # common keys: 'features', 'prices', 'timestamps', 'close'
+                    if "prices" in features_obj and "timestamps" in features_obj:
+                        prices = np.asarray(features_obj["prices"]).astype(float)
+                        timestamps = pd.to_datetime(features_obj["timestamps"])
+                        logger.info("Inferred prices/timestamps from features dict")
+                    elif "close" in features_obj and isinstance(features_obj["close"], (list, np.ndarray)):
+                        prices = np.asarray(features_obj["close"]).astype(float)
+                        timestamps = pd.date_range(end=datetime.now(), periods=len(prices), freq="T")
+                        logger.info("Inferred prices from features dict 'close' (timestamps synthetic)")
+                elif isinstance(features_obj, pd.DataFrame):
+                    if "Close" in features_obj.columns:
+                        prices = features_obj["Close"].values
+                        timestamps = features_obj.index
+                        logger.info("Inferred prices/timestamps from features DataFrame")
+
+            # Determine feature matrix
+            if isinstance(features_obj, dict) and "features" in features_obj:
+                features = np.asarray(features_obj["features"])
+            elif isinstance(features_obj, (np.ndarray, list)):
+                features = np.asarray(features_obj)
+            elif isinstance(features_obj, pd.DataFrame):
+                features = features_obj.values
+            else:
+                logger.warning("Unrecognized features format in features file")
+
+            if features is None:
+                raise FileNotFoundError(f"Features file present but could not parse features: {args.features_path}")
+            logger.info(f"Loaded features: shape={getattr(features, 'shape', 'unknown')}")
         else:
             logger.warning(
-                f"Features not found at {args.features_path}. "
-                "Please provide pre-computed features for backtesting."
+                f"Features not found at {args.features_path}. Please provide pre-computed features for backtesting."
             )
             raise FileNotFoundError(f"Features file not found: {args.features_path}")
+
+        # Final validation: ensure we have prices, timestamps and features
+        if prices is None or timestamps is None:
+            raise FileNotFoundError(
+                "Could not find historical prices/timestamps. Provide --data-path or a features file containing 'prices' and 'timestamps'."
+            )
 
         # Validate shapes
         if len(prices) != len(features):
@@ -511,13 +598,14 @@ Examples:
         logger.info(f"📊 Results saved to: {results_path}")
 
     except FileNotFoundError as e:
-        logger.error(f"❌ File not found: {e}")
+        logger.error(f"File not found: {e}")
         raise SystemExit(1) from e
     except ValueError as e:
-        logger.error(f"❌ Invalid data: {e}")
+        logger.error(f"Invalid data: {e}")
         raise SystemExit(1) from e
     except Exception as e:
-        logger.error(f"❌ Unexpected error: {e}", exc_info=True)
+        logger.error(f"Unexpected error: {e}")
+        logger.debug("Exception details", exc_info=True)
         raise SystemExit(1) from e
 
 

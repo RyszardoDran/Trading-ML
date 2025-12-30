@@ -6,7 +6,8 @@ import numpy as np
 
 
 def main() -> None:
-    models_dir = Path(__file__).resolve().parents[1] / "models"
+    # Prefer canonical outputs models directory where training saves artifacts
+    models_dir = Path(__file__).resolve().parents[2] / "outputs" / "models"
 
     model_path = models_dir / "sequence_xgb_model.pkl"
     meta_path = models_dir / "sequence_threshold.json"

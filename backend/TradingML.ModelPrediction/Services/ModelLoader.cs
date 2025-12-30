@@ -48,12 +48,50 @@ public class ModelLoader
             using var thresholdDoc = JsonDocument.Parse(thresholdJson);
             var root = thresholdDoc.RootElement;
 
-            var threshold = root.GetProperty("threshold").GetDouble();
-            var windowSize = root.GetProperty("window_size").GetInt32();
-            var featuresPerCandle = root.GetProperty("n_features_per_candle").GetInt32();
-            var totalFeatures = root.GetProperty("total_features").GetInt32();
-            var recommendedMinCandles = root.GetProperty("recommended_min_candles").GetInt32();
-            var winRate = root.GetProperty("win_rate").GetDouble();
+            // Validate required and optional properties safely
+            var missingRequired = new List<string>();
+
+            if (!root.TryGetProperty("threshold", out var thresholdProp) || thresholdProp.ValueKind == JsonValueKind.Null)
+                missingRequired.Add("threshold");
+            if (!root.TryGetProperty("window_size", out var windowSizeProp) || windowSizeProp.ValueKind == JsonValueKind.Null)
+                missingRequired.Add("window_size");
+            if (!root.TryGetProperty("n_features_per_candle", out var featuresPerCandleProp) || featuresPerCandleProp.ValueKind == JsonValueKind.Null)
+                missingRequired.Add("n_features_per_candle");
+            if (!root.TryGetProperty("total_features", out var totalFeaturesProp) || totalFeaturesProp.ValueKind == JsonValueKind.Null)
+                missingRequired.Add("total_features");
+
+            if (missingRequired.Any())
+            {
+                var msg = $"Missing required model metadata properties: {string.Join(", ", missingRequired)}";
+                _logger.LogError(msg);
+                throw new JsonException(msg);
+            }
+
+            var threshold = thresholdProp.GetDouble();
+            var windowSize = windowSizeProp.GetInt32();
+            var featuresPerCandle = featuresPerCandleProp.GetInt32();
+            var totalFeatures = totalFeaturesProp.GetInt32();
+
+            // Optional properties - log and provide sensible defaults when absent
+            int recommendedMinCandles = 0;
+            if (root.TryGetProperty("recommended_min_candles", out var recommendedProp) && recommendedProp.ValueKind != JsonValueKind.Null)
+            {
+                recommendedMinCandles = recommendedProp.GetInt32();
+            }
+            else
+            {
+                _logger.LogWarning("Optional property 'recommended_min_candles' not found in threshold JSON; defaulting to 0");
+            }
+
+            double winRate = 0.0;
+            if (root.TryGetProperty("win_rate", out var winRateProp) && winRateProp.ValueKind != JsonValueKind.Null)
+            {
+                winRate = winRateProp.GetDouble();
+            }
+            else
+            {
+                _logger.LogWarning("Optional property 'win_rate' not found in threshold JSON; defaulting to 0.0");
+            }
 
             // Load feature importance if available
             var featureImportance = new Dictionary<string, double>();
