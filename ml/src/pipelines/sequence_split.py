@@ -54,9 +54,24 @@ def split_sequences(
     Raises:
         ValueError: If any split is empty or insufficient coverage
     """
+    # Validate input shapes
+    if len(X) != len(y) or len(X) != len(timestamps):
+        raise ValueError(
+            f"Shape mismatch: X={len(X)}, y={len(y)}, timestamps={len(timestamps)}"
+        )
+    
+    if len(X) == 0:
+        raise ValueError("Empty input arrays provided")
+    
     train_end = pd.Timestamp(train_until)
     val_end = pd.Timestamp(val_until)
     test_end = pd.Timestamp(test_until)
+    
+    # Validate chronological order
+    if train_end >= val_end:
+        raise ValueError(f"train_until ({train_until}) must be before val_until ({val_until})")
+    if val_end >= test_end:
+        raise ValueError(f"val_until ({val_until}) must be before test_until ({test_until})")
 
     # Dodaj gap między splitami
     val_start = train_end + pd.Timedelta(days=gap_days)
@@ -71,6 +86,23 @@ def split_sequences(
     X_test, y_test = X[test_mask], y[test_mask]
 
     if min(map(len, [X_train, X_val, X_test])) == 0:
-        raise ValueError("One of the splits is empty; verify data coverage for train/val/test ranges")
+        raise ValueError(
+            f"One of the splits is empty; verify data coverage for train/val/test ranges. "
+            f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}"
+        )
+    
+    # Log split statistics
+    logger.info(
+        f"Chronological split complete: "
+        f"Train={len(X_train)} ({len(X_train)/len(X)*100:.1f}%), "
+        f"Val={len(X_val)} ({len(X_val)/len(X)*100:.1f}%), "
+        f"Test={len(X_test)} ({len(X_test)/len(X)*100:.1f}%)"
+    )
+    logger.info(
+        f"Time ranges: "
+        f"Train=[{timestamps[train_mask].min()} to {timestamps[train_mask].max()}], "
+        f"Val=[{timestamps[val_mask].min()} to {timestamps[val_mask].max()}], "
+        f"Test=[{timestamps[test_mask].min()} to {timestamps[test_mask].max()}]"
+    )
 
     return X_train, X_val, X_test, y_train, y_val, y_test, timestamps[train_mask], timestamps[val_mask], timestamps[test_mask]

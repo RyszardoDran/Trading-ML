@@ -189,7 +189,7 @@ def validate_input_candles(df: pd.DataFrame, required_size: int) -> None:
     if (df[["Open", "High", "Low", "Close"]] <= 0).any().any():
         raise ValueError("OHLC contains non-positive values")
     if (df["High"] < df["Low"]).any():
-        raise ValueError("Price inconsistency: High < Low detected")
+        raise ValueError("Price inconsistency: High < Low detected")raise ValueError("Price inconsistency: High < Low detected")
 
 
 def predict(
@@ -538,7 +538,7 @@ def load_candles_from_csv(
             raise ValueError(f"Insufficient data: need {n_candles} candles, got {len(df)}")
         return df.tail(n_candles)
     else:
-        raise ValueError("Must specify either n_days or n_candles")
+        raise ValueError("Must specify either n_days or n_candles")raise ValueError("Must specify either n_days or n_candles")
 
 
 def load_latest_candles_from_dir(
@@ -599,7 +599,7 @@ def load_latest_candles_from_dir(
             raise ValueError(f"Insufficient data: need {n_candles} candles, got {len(combined)}")
         return combined.tail(n_candles)
     else:
-        raise ValueError("Must specify either n_days or n_candles")
+        raise ValueError("Must specify either n_days or n_candles")raise ValueError("Must specify either n_days or n_candles")
 
 
 if __name__ == "__main__":
