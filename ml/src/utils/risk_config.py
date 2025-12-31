@@ -12,9 +12,9 @@ SL_ATR_MULTIPLIER: float = 1.0
 TP_ATR_MULTIPLIER: float = 2.0
 
 # ===== Model Threshold Parameters =====
-MIN_PRECISION_THRESHOLD: float = 0.65  # Rozluźniony, by pozwolić na więcej sygnałów (więcej trade'ów)
+MIN_PRECISION_THRESHOLD: float = 0.7  # Rozluźniony, by pozwolić na więcej sygnałów (więcej trade'ów)
 MIN_TRADES_PER_TEST: int = 5         # Minimalna liczba transakcji w teście, aby uznać model za wiarygodny
-MAX_TRADES_PER_DAY: int = 30          # Podwyższony limit by pozwolić modelowi wysyłać więcej sygnałów w real-live
+MAX_TRADES_PER_DAY: int = 150          # Podwyższony limit by pozwolić modelowi wysyłać więcej sygnałów w real-live
 
 # ===== Threshold Optimization Strategy =====
 USE_EV_OPTIMIZATION: bool = True     # Domyślnie F1-optimized; EV enabled to explore profit-driven thresholds
@@ -23,8 +23,8 @@ USE_HYBRID_OPTIMIZATION: bool = True  # Hybryda: EV-optimized ale z precision AN
 # When MAX_TRADES_PER_DAY is active, a high recall floor can become infeasible and
 # forces threshold selection into fallbacks. We default to no recall floor and
 # let the daily cap control trade frequency.
-MIN_RECALL_FLOOR: float = 0.35  # Zapewnij minimalny recall (więcej sygnałów), ale nie za wysoki aby uniknąć infeasibility
-EV_WIN_COEFFICIENT: float = 1.0       # Mnożnik dla True Positives (wygrane transakcje)
+MIN_RECALL_FLOOR: float = 0.30  # Zapewnij minimalny recall (więcej sygnałów), ale nie za wysoki aby uniknąć infeasibility
+EV_WIN_COEFFICIENT: float = 1.2       # Mnożnik dla True Positives (wygrane transakcje)
 EV_LOSS_COEFFICIENT: float = -1.0     # Mnożnik dla False Positives (przegrane transakcje)
 
 # ===== Cost-Sensitive Learning (POINT 1) =====
@@ -33,11 +33,11 @@ SAMPLE_WEIGHT_POSITIVE: float = 2.0   # Zmniejszona waga pozytywów by zwiększy
 SAMPLE_WEIGHT_NEGATIVE: float = 1.0   # Waga dla True Negatives (baseline)
 
 # ===== Target (SL/TP) Simulation Parameters =====
-MIN_HOLD_M5_CANDLES: int = 3           # Minimalny czas: 2 świece M5 = 10 minut
+MIN_HOLD_M5_CANDLES: int = 2           # Minimalny czas: 2 świece M5 = 10 minut
 MAX_HORIZON_M5_CANDLES: int = 60       # Maksymalny czas czekania: 60 świec M5 = 300 minut (5 godzin)
 
 # ===== Sequence Parameters =====
-WINDOW_SIZE: int = 60                # Skrócony window by szybciej wykrywać setups i wygenerować więcej próbek
+WINDOW_SIZE: int = 80                # Skrócony window by szybciej wykrywać setups i wygenerować więcej próbek
 
 # ===== Trading Filters =====
 ENABLE_M5_ALIGNMENT: bool = False      # M5 candle close alignment

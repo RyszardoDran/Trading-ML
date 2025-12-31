@@ -1,0 +1,184 @@
+2025-12-30 18:33:37 - ml.src.pipeline_config_extended - INFO - Pipeline configuration validated successfully
+2025-12-30 18:33:37 - __main__ - INFO - 
+================================================================================
+2025-12-30 18:33:37 - __main__ - INFO - SEQUENCE XGBoost TRAINING PIPELINE - XAU/USD 1-Minute Data
+2025-12-30 18:33:37 - __main__ - INFO - ================================================================================
+2025-12-30 18:33:37 - __main__ - INFO - Log file: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\logs\sequence_xgb_train_years_2020_2021_2022_2023_2024_2025_20251230_183337.log
+2025-12-30 18:33:37 - __main__ - INFO - Start time: 2025-12-30 18:33:37
+2025-12-30 18:33:37 - __main__ - INFO - Data years: [2020, 2021, 2022, 2023, 2024, 2025]
+2025-12-30 18:33:37 - __main__ - INFO - 
+Pipeline Configuration:
+2025-12-30 18:33:37 - __main__ - INFO -   Feature engineering version: v1
+2025-12-30 18:33:37 - __main__ - INFO -   Window size: 60 candles
+2025-12-30 18:33:37 - __main__ - INFO -   ATR SL multiplier: 1.0x (from risk_config.py)
+2025-12-30 18:33:37 - __main__ - INFO -   ATR TP multiplier: 2.0x (from risk_config.py)
+2025-12-30 18:33:37 - __main__ - INFO -   Min hold time: 3 M5 candles
+2025-12-30 18:33:37 - __main__ - INFO -   Max horizon: 60 M5 candles
+2025-12-30 18:33:37 - __main__ - INFO -   Trading session: london_ny
+2025-12-30 18:33:37 - __main__ - INFO -   Threshold optimization: HYBRID (EV with precision AND recall floors)
+2025-12-30 18:33:37 - __main__ - INFO -     - Min precision: 0.65
+2025-12-30 18:33:37 - __main__ - INFO -     - Min recall: 0.35
+2025-12-30 18:33:37 - __main__ - INFO -     - Win coefficient: 1.0
+2025-12-30 18:33:37 - __main__ - INFO -     - Loss coefficient: -1.0
+2025-12-30 18:33:37 - __main__ - INFO -   M5 alignment filter: disabled
+2025-12-30 18:33:37 - __main__ - INFO -   Trend filter: enabled
+2025-12-30 18:33:37 - __main__ - INFO -   Pullback filter: disabled
+2025-12-30 18:33:37 - __main__ - INFO -   Random state: 42
+2025-12-30 18:33:37 - __main__ - INFO - ================================================================================
+
+2025-12-30 18:33:37 - ml.src.pipeline_stages - INFO - Loading data from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-30 18:33:37 - ml.src.data_loading.loaders - INFO - Year filter applied: loading only [2020, 2021, 2022, 2023, 2024, 2025]
+2025-12-30 18:33:40 - ml.src.pipeline_stages - INFO - Loaded 1,844,538 rows from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2025-12-30 18:33:40 - ml.src.pipeline_stages - INFO - Date range: 2020-01-02 06:00:00 to 2025-11-28 19:43:00
+2025-12-30 18:33:40 - ml.src.pipeline_stages - WARNING - feature_version parameter is deprecated and ignored (passed: v1)
+2025-12-30 18:33:40 - ml.src.pipeline_stages - INFO - Aggregating M1 data to M5 timeframe...
+2025-12-30 18:33:40 - ml.src.features.engineer_m5 - INFO - Aggregating 1844538 M1 candles to M5...
+2025-12-30 18:33:40 - ml.src.features.engineer_m5 - INFO - Aggregated to 369330 M5 candles (5.0x compression)
+2025-12-30 18:33:40 - ml.src.pipeline_stages - INFO - Aggregated 1,844,538 M1 candles → 369,330 M5 candles (20.0% compression)
+2025-12-30 18:33:40 - ml.src.pipeline_stages - INFO - Engineering technical features on M5 timeframe (with M15/M60 context)...
+2025-12-30 18:33:40 - ml.src.features.engineer_m5 - INFO - Engineering M5 features...
+2025-12-30 18:33:40 - ml.src.features.engineer_m5 - INFO - Aggregating 369330 M1 candles to M5...
+2025-12-30 18:33:41 - ml.src.features.engineer_m5 - INFO - Aggregated to 369330 M5 candles (1.0x compression)
+2025-12-30 18:33:41 - ml.src.features.engineer_m5 - INFO - Computing M5 primary features...
+2025-12-30 18:33:44 - ml.src.features.engineer_m5 - INFO - Computing M15 context from M5...
+2025-12-30 18:33:44 - ml.src.features.engineer_m5 - INFO - Computing M60 context from M5...
+2025-12-30 18:33:45 - ml.src.features.engineer_m5 - INFO - M5 feature engineering complete: 369327 rows × 32 features
+2025-12-30 18:33:45 - ml.src.features.engineer_m5 - INFO - Timeframe: M5 (5-minute candles)
+2025-12-30 18:33:45 - ml.src.features.engineer_m5 - INFO - Date range: 2020-01-02 06:15:00 to 2025-11-28 19:40:00
+2025-12-30 18:33:45 - ml.src.pipeline_stages - INFO - Features shape: (369327, 32)
+2025-12-30 18:33:45 - ml.src.pipeline_stages - INFO - Feature columns: 32
+2025-12-30 18:33:45 - ml.src.pipeline_stages - INFO - Creating targets on M5 timeframe (SL=1.0×ATR, TP=2.0×ATR, min_hold=3 M5 candles, max_horizon=60 M5 candles)
+2025-12-30 18:33:45 - ml.src.targets.target_maker - INFO - Creating targets (SL/TP simulation) for 369,327 candles...
+2025-12-30 18:33:45 - ml.src.targets.target_maker - INFO - Parameters: SL=1.0×ATR, TP=2.0×ATR, min_hold=3min, max_horizon=60min
+2025-12-30 18:33:45 - ml.src.targets.target_maker - INFO - No precomputed ATR column found; calculating ATR (14) on provided timeframe
+2025-12-30 18:33:45 - ml.src.targets.target_maker - INFO - Target creation complete: 369,267 valid targets
+2025-12-30 18:33:45 - ml.src.pipeline_stages - INFO - Targets shape: 369267
+2025-12-30 18:33:45 - ml.src.pipeline_stages - INFO - Positive class (win): 130,645 (35.38%)
+2025-12-30 18:33:45 - ml.src.pipeline_stages - INFO - Negative class (loss): 238,622 (64.62%)
+2025-12-30 18:33:45 - ml.src.pipeline_stages - INFO - Creating sequences on M5 timeframe (window_size=60 M5 candles = 300 minutes)...
+2025-12-30 18:33:45 - ml.src.pipeline_stages - INFO - Filter config: m5_alignment=False (already M5), trend=True, pullback=False, max_windows=200,000
+2025-12-30 18:33:45 - ml.src.sequences.sequencer - INFO - M5 alignment filter disabled; keeping all timestamps irrespective of minute alignment
+2025-12-30 18:33:45 - ml.src.sequences.sequencer - INFO - Applied Trend Filter (dist_sma_200 > 0.00, ADX > 15.00): kept 181641/369208 (49.2%)
+2025-12-30 18:33:45 - ml.src.sequences.sequencer - INFO - Pullback filter disabled; not constraining RSI_M5
+2025-12-30 18:33:45 - ml.src.sequences.sequencer - INFO - Session filter 'london_ny': keeping 111,375 / 369,208 windows (30.2%)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - Sequences created: X.shape=(111375, 1920), y.shape=(111375,)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - Positive class in sequences: 38,648 (34.70%)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - Using chronological 3-way split (train/val/test)...
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - Using percentage split (70/15/15) for year_filter=[2020, 2021, 2022, 2023, 2024, 2025]
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - Split sizes: train=77,962, val=16,706, test=16,707
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - Class distribution validation:
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO -   TRAIN: pos=26,793 (34.4%), neg=51,169 (65.6%)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO -   VAL: pos=6,007 (36.0%), neg=10,699 (64.0%)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO -   TEST: pos=5,848 (35.0%), neg=10,859 (65.0%)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO -   Max difference in positive class: 1.6% (tolerance: 10.0%)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO -   ✅ Class distributions are stable (max diff: 1.6% < 10.0%)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - WARNING - ⚠️  118 sequences cross temporal boundaries (potential data leakage)
+2025-12-30 18:33:46 - ml.src.pipeline_stages - WARNING -    Removing 118 sequences to prevent data leakage
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - Removing 118 boundary-crossing sequences...
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - After removal: train=77,879, val=16,689, test=16,689
+2025-12-30 18:33:46 - ml.src.pipeline_stages - INFO - Scaling features with RobustScaler (robust to outliers)...
+2025-12-30 18:33:59 - ml.src.pipeline_stages - INFO - Feature scaling complete: mean=0.0314, std=0.7558
+2025-12-30 18:33:59 - ml.src.pipeline_stages - INFO - Training XGBoost model...
+2025-12-30 18:33:59 - ml.src.pipeline_stages - INFO - 
+[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...
+2025-12-30 18:33:59 - ml.src.pipeline_stages - INFO -   Sample weights: positive=2.0, negative=1.0
+2025-12-30 18:33:59 - ml.src.pipeline_stages - INFO -   Weight ratio (positive/negative): 2.00x
+2025-12-30 18:33:59 - ml.src.training.sequence_xgb_trainer - INFO - Class balance (train): pos=26,748, neg=51,131, imbalance_ratio=1.91
+2025-12-30 18:33:59 - ml.src.training.sequence_xgb_trainer - INFO - Applied scale_pos_weight=1.9116 to handle class imbalance
+2025-12-30 18:33:59 - ml.src.training.sequence_xgb_trainer - INFO - [POINT 1] Cost-Sensitive Learning: using sample weights (mean=1.3435)
+2025-12-30 18:33:59 - ml.src.training.sequence_xgb_trainer - INFO - Training XGBoost classifier...
+2025-12-30 18:42:49 - ml.src.training.sequence_xgb_trainer - INFO - Training completed
+2025-12-30 18:42:49 - ml.src.pipeline_stages - INFO - Model training complete
+2025-12-30 18:42:49 - ml.src.pipeline_stages - INFO - Optimizing decision threshold on VAL set...
+2025-12-30 18:42:49 - ml.src.training.sequence_evaluation - INFO - Running threshold optimization on VAL set...
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO - 
+Top 5 thresholds on VAL set:
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   T=0.66: Precision=0.6506, Recall=0.5911, F1=0.6194, Score=1.0000
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   T=0.66: Precision=0.6519, Recall=0.5878, F1=0.6182, Score=1.0000
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   T=0.66: Precision=0.6531, Recall=0.5843, F1=0.6168, Score=1.0000
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   T=0.66: Precision=0.6544, Recall=0.5810, F1=0.6155, Score=1.0000
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   T=0.66: Precision=0.6571, Recall=0.5788, F1=0.6155, Score=1.0000
+2025-12-30 18:42:53 - ml.src.pipeline_stages - INFO - Optimal threshold: 0.6553 (Score=1.0000 on VAL)
+2025-12-30 18:42:53 - ml.src.pipeline_stages - INFO - Evaluating on TEST set with optimized threshold...
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO - Probability stats: min=0.0007, max=0.9922, mean=0.4935, std=0.2648
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO - Using fixed threshold: 0.6553
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO - Confusion matrix@thr=0.6553:
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   [[TN=9698, FP=1155],
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -    [FN=3249, TP=2587]]
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO - 
+TEST SET EVALUATION:
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   Precision: 0.6913
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   Recall:    0.4433
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   F1:        0.5402
+2025-12-30 18:42:53 - ml.src.training.sequence_evaluation - INFO -   ROC-AUC:   0.7977
+2025-12-30 18:42:53 - ml.src.pipeline_stages - INFO - Final TEST metrics: threshold=0.6553, win_rate=0.6913 (69.13%), precision=0.6913, recall=0.4433, f1=0.5402, roc_auc=0.7977, pr_auc=0.6898
+2025-12-30 18:42:53 - ml.src.pipeline_stages - INFO - Saving artifacts...
+2025-12-30 18:42:53 - ml.src.training.sequence_artifacts - INFO - Saved model to sequence_xgb_model.pkl
+2025-12-30 18:42:53 - ml.src.training.sequence_artifacts - INFO - Saved scaler to sequence_scaler.pkl (required for inference)
+2025-12-30 18:42:53 - ml.src.training.sequence_artifacts - INFO - Saved feature columns to sequence_feature_columns.json
+2025-12-30 18:42:53 - ml.src.training.sequence_artifacts - INFO - Saved metadata to sequence_threshold.json (analysis_window=7 days)
+2025-12-30 18:42:53 - ml.src.training.sequence_artifacts - INFO - Analyzing feature importance...
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO - 
+Top 30 most important features:
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    1. t-10_bb_pos_m60                          = 0.005529
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    2. t-9_bb_pos_m60                           = 0.004823
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    3. t-8_bb_pos_m60                           = 0.004675
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    4. t-11_bb_pos_m60                          = 0.003958
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    5. t-0_bb_pos_m60                           = 0.003826
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    6. t-1_bb_pos_m60                           = 0.003330
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    7. t-2_bb_pos_m60                           = 0.003090
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    8. t-7_bb_pos_m60                           = 0.002612
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -    9. t-0_dist_sma_200_m5                      = 0.002581
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   10. t-2_dist_sma_20_m15                      = 0.002537
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   11. t-2_cvd_m15                              = 0.002491
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   12. t-0_dist_sma_200                         = 0.002213
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   13. t-12_bb_pos_m60                          = 0.001886
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   14. t-2_bb_pos_m15                           = 0.001869
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   15. t-0_rsi_m60                              = 0.001810
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   16. t-11_rsi_m60                             = 0.001742
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   17. t-8_rsi_m60                              = 0.001718
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   18. t-1_bb_pos_m15                           = 0.001641
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   19. t-0_stoch_k_m5                           = 0.001641
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   20. t-35_sma_200                             = 0.001516
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   21. t-14_bb_pos_m60                          = 0.001498
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   22. t-6_bb_pos_m60                           = 0.001467
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   23. t-19_bb_pos_m60                          = 0.001454
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   24. t-18_bb_pos_m60                          = 0.001431
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   25. t-1_dist_sma_20_m15                      = 0.001402
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   26. t-12_rsi_m60                             = 0.001397
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   27. t-11_cvd_m60                             = 0.001366
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   28. t-0_dist_sma_20_m5                       = 0.001366
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   29. t-0_bb_pos_m5                            = 0.001365
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   30. t-3_bb_pos_m60                           = 0.001359
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO - 
+Aggregated importance by feature type:
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   bb_pos_m60                     = 0.078657
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   rsi_m60                        = 0.053954
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   cvd_m60                        = 0.046532
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   sma_200                        = 0.045497
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   atr_m5                         = 0.042325
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   cvd_m15                        = 0.040800
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   obv_m60                        = 0.039309
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   dist_sma_200_m5                = 0.038611
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   dist_sma_200_m15               = 0.038541
+2025-12-30 18:42:53 - ml.src.training.sequence_feature_analysis - INFO -   dist_sma_20_m15                = 0.037194
+2025-12-30 18:42:53 - ml.src.training.sequence_artifacts - INFO - Saved feature importance to sequence_feature_importance.json
+2025-12-30 18:42:53 - ml.src.pipeline_stages - INFO - Artifacts saved to C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\models
+2025-12-30 18:42:53 - __main__ - INFO - 
+================================================================================
+2025-12-30 18:42:53 - __main__ - INFO - TRAINING COMPLETE - SUMMARY
+2025-12-30 18:42:53 - __main__ - INFO - ================================================================================
+2025-12-30 18:42:53 - __main__ - INFO - End time: 2025-12-30 18:42:53
+2025-12-30 18:42:53 - __main__ - INFO - 
+Final Metrics:
+2025-12-30 18:42:53 - __main__ - INFO -   Window Size:       60 candles
+2025-12-30 18:42:53 - __main__ - INFO -   Threshold:         0.6553
+2025-12-30 18:42:53 - __main__ - INFO -   WIN RATE:          0.6913 (69.13%)
+2025-12-30 18:42:53 - __main__ - INFO -   Precision:         0.6913
+2025-12-30 18:42:53 - __main__ - INFO -   Recall:            0.4433
+2025-12-30 18:42:53 - __main__ - INFO -   F1 Score:          0.5402
+2025-12-30 18:42:53 - __main__ - INFO -   ROC-AUC:           0.7977
+2025-12-30 18:42:53 - __main__ - INFO -   PR-AUC:            0.6898
+2025-12-30 18:42:53 - __main__ - INFO - 
+Artifacts saved to: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\models
+2025-12-30 18:42:53 - __main__ - INFO - ================================================================================

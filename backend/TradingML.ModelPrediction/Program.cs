@@ -279,19 +279,28 @@ class Program
         if (!signal.EntryPrice.HasValue || !signal.StopLoss.HasValue || !signal.TakeProfit.HasValue)
             return;
 
-        // Look at future candles after the entry (starting from next candle)
-        var startIdx = windowEndIndex + 1;
-        if (startIdx >= allCandles.Count)
+        // Trade is opened at Open of the next candle after signal (realistic entry)
+        var entryIdx = windowEndIndex + 1;
+        if (entryIdx >= allCandles.Count)
             return; // No future data available
 
-        // Scan through future candles to find TP or SL hit
-        // This is a simple strategy: check if high >= TP (win) or low <= SL (loss)
-        for (int i = startIdx; i < Math.Min(startIdx + 100, allCandles.Count); i++) // Look ahead up to 100 candles
+        var entryCandle = allCandles[entryIdx];
+        signal.EntryTime = entryCandle.Timestamp;
+        signal.EntryPrice = entryCandle.Open;
+        // SL/TP wyliczane względem nowego EntryPrice, ale ATR i multiplikatory z sygnału
+        var atr = signal.AtrM5 ?? 0.0;
+        var slMult = signal.SlAtrMultiplier ?? 1.0;
+        var tpMult = signal.TpAtrMultiplier ?? 2.0;
+        signal.StopLoss = signal.EntryPrice - atr * slMult;
+        signal.TakeProfit = signal.EntryPrice + atr * tpMult;
+
+        // Look at future candles after the entry (starting from entryIdx)
+        for (int i = entryIdx; i < Math.Min(entryIdx + 100, allCandles.Count); i++) // Look ahead up to 100 candles
         {
             var candle = allCandles[i];
-            var entryPrice = signal.EntryPrice.Value;
             var sl = signal.StopLoss.Value;
             var tp = signal.TakeProfit.Value;
+            var entryPrice = signal.EntryPrice.Value;
 
             // Check if take profit was hit
             if (candle.High >= tp)
@@ -315,9 +324,9 @@ class Program
         }
 
         // If neither TP nor SL hit in the lookahead window, check current price
-        if (startIdx < allCandles.Count)
+        if (entryIdx < allCandles.Count)
         {
-            var lastCandle = allCandles[Math.Min(startIdx + 99, allCandles.Count - 1)];
+            var lastCandle = allCandles[Math.Min(entryIdx + 99, allCandles.Count - 1)];
             signal.ExitTime = lastCandle.Timestamp;
             signal.ExitPrice = lastCandle.Close;
             signal.ProfitLoss = lastCandle.Close - signal.EntryPrice.Value;

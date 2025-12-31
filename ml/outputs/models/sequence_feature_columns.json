@@ -26,5 +26,9 @@
   "rsi_m60",
   "bb_pos_m60",
   "cvd_m60",
-  "obv_m60"
+  "obv_m60",
+  "volume_roc",
+  "divergence_volume_m5",
+  "divergence_volume_m5_strong",
+  "divergence_volume_new_high_m5"
 ]

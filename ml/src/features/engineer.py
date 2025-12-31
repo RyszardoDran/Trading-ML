@@ -46,6 +46,7 @@ This implementation uses resample for accuracy with efficient forward-fill.
     - No data leakage (only uses past data)
 """
 
+
 import logging
 import numpy as np
 import pandas as pd
@@ -54,6 +55,7 @@ from .indicators import (
     compute_rsi, compute_stochastic, compute_williams_r, compute_cci,
     compute_macd, compute_adx, compute_bollinger_bands, compute_atr
 )
+from .engineer_volume import calculate_volume_roc
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)  # Suppress INFO logs during backtesting
@@ -382,7 +384,10 @@ def engineer_candle_features(df: pd.DataFrame) -> pd.DataFrame:
     sma_20 = close.rolling(20, min_periods=1).mean()
     dist_sma_20 = (close - sma_20) / (atr_14 + 1e-9)
     
-    # ========== Create Features DataFrame ==========
+    # ========== Volume-based feature ========== 
+    volume_roc = calculate_volume_roc(df, period=5).fillna(0)
+
+    # ========== Create Features DataFrame ========== 
     features = pd.DataFrame(
         {
             # M5 Context (STRONG - 0.04-0.07 correlation)
@@ -407,6 +412,8 @@ def engineer_candle_features(df: pd.DataFrame) -> pd.DataFrame:
             "rsi_14": rsi_14,
             "ret_1": ret_1,
             "atr_14": atr_14,
+            # New volume-based feature
+            "volume_roc": volume_roc,
         },
         index=df.index,
     )

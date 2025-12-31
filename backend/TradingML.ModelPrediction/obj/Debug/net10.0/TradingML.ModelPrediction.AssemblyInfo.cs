@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Console application for ML model prediction on XAU/USD candles")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5239485c77899ee4a2fb03ee7baaa6fcd31c2ffa")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e196f839358b4eb9c69cadd35f50d4c9124a5eee")]
 [assembly: System.Reflection.AssemblyProductAttribute("TradingML.ModelPrediction")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TradingML.ModelPrediction")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

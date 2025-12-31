@@ -153,6 +153,7 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         >>> # Create 100-candle sequences (100 × 5min = 500 minutes)
         >>> X, y = create_sequences(features_m5, window_size=100)
     """
+    # (divergence code moved below, after M5 aggregation and variable initialization)
     logger.info("Engineering M5 features...")
     
     # Step 1: Aggregate M1 → M5
@@ -197,7 +198,37 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     # Volume Analysis M5
     volume_m5 = df_m5["Volume"].astype(np.float32)
     volume_m5_norm = volume_m5 / (volume_m5.rolling(20).mean() + 1e-9)
-    
+    # NEW: Volume Rate of Change (volume_roc)
+    volume_roc = volume_m5.pct_change(5).fillna(0)
+
+    # NEW: Volume divergence (dywergencja ceny i wolumenu)
+    # Definicja: jeśli cena rośnie (Close > Close.shift), a wolumen maleje (Volume < Volume.shift), lub odwrotnie
+    price_delta = close - close.shift(1)
+    volume_delta = volume_m5 - volume_m5.shift(1)
+    divergence_volume_m5 = ((price_delta * volume_delta) < 0).astype(int)
+    # Opcja B: silna dywergencja przez 3 kolejne świece
+    strong_div = ((divergence_volume_m5.rolling(3).sum() == 3)).astype(int)
+
+    # NEW: Dywergencja - nowe high, wolumen niższy niż na poprzednim high (słabnący trend)
+    window_n = 20
+    rolling_high = close.rolling(window_n, min_periods=1).max()
+    is_new_high = (close == rolling_high)
+    prev_high_volume = np.full(len(close), np.nan, dtype=np.float32)
+    for i in range(len(close)):
+        if is_new_high.iloc[i]:
+            search_start = max(0, i - window_n)
+            prev_idx = None
+            for j in range(i - 1, search_start - 1, -1):
+                if is_new_high.iloc[j]:
+                    prev_idx = j
+                    break
+            if prev_idx is not None:
+                prev_high_volume[i] = volume_m5.iloc[prev_idx]
+        else:
+            prev_high_volume[i] = np.nan
+    prev_high_volume = pd.Series(prev_high_volume, index=close.index)
+    divergence_volume_new_high_m5 = ((is_new_high) & (prev_high_volume.notna()) & (volume_m5 < prev_high_volume)).astype(int)
+
     # CVD (Cumulative Volume Delta) on M5
     if ENABLE_CVD_INDICATOR:
         open_p = df_m5["Open"].astype(np.float32)
@@ -220,14 +251,14 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     
     # OBV (On-Balance Volume) on M5
     if FEAT_ENABLE_OBV:
-        obv_m5 = compute_obv(close, volume)
+        obv_m5 = compute_obv(close, volume_m5)
         obv_m5_norm = (obv_m5 - obv_m5.rolling(50, min_periods=1).mean()) / (obv_m5.rolling(50, min_periods=1).std() + 1e-9)
     else:
         obv_m5_norm = pd.Series(0.0, index=df_m5.index)
     
     # MFI (Money Flow Index) on M5
     if FEAT_ENABLE_MFI:
-        mfi_m5 = compute_mfi(high, low, close, volume, period=14)
+        mfi_m5 = compute_mfi(high, low, close, volume_m5, period=14)
         mfi_m5_norm = (mfi_m5 - 50.0) / 25.0  # Normalize 0-100 range to approximately -2..2
     else:
         mfi_m5_norm = pd.Series(0.0, index=df_m5.index)
@@ -501,6 +532,11 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         if FEAT_ENABLE_MFI:
             features_dict["mfi_m60"] = pd.Series(0.0, index=df_m5.index)
 
+    # Dodajemy volume_roc do features
+    features_dict["volume_roc"] = volume_roc
+    features_dict["divergence_volume_m5"] = divergence_volume_m5
+    features_dict["divergence_volume_m5_strong"] = strong_div
+    features_dict["divergence_volume_new_high_m5"] = divergence_volume_new_high_m5
     features_m5 = pd.DataFrame(features_dict, index=df_m5.index)
     
     # Clean NaN and inf values
