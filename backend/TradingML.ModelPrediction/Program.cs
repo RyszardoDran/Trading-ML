@@ -13,6 +13,9 @@ namespace TradingML.ModelPrediction;
 /// </summary>
 class Program
 {
+    private const int LondonNyStartHour = 8;  // UTC approx, must match ML session filter
+    private const int LondonNyEndHour = 22;   // UTC approx, must match ML session filter
+
     static async Task<int> Main(string[] args)
     {
         try
@@ -177,6 +180,28 @@ class Program
             var contextCandles = candles.GetRange(0, windowEndIndex + 1);  // All candles from start to window end
             var windowEndTime = candles[windowEndIndex].Timestamp;
 
+            // Always monitor an active trade (even outside session hours)
+            if (activeTrade != null && activeTrade.Outcome == "Pending")
+            {
+                EvaluateActiveTrade(activeTrade, candles, windowEndIndex);
+
+                if (activeTrade.Outcome != "Pending")
+                {
+                    logger.LogInformation($"  Trade #{activeTrade.WindowIndex + 1} resolved: {activeTrade.Outcome} | P&L: {activeTrade.ProfitLoss?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
+                    activeTrade = null;
+                    stepSize = STEP_SIZE_HOURLY;
+                    logger.LogInformation($"  Switched back to HOURLY scanning (step size: {stepSize} minutes)");
+                }
+            }
+
+            // When a trade is active, do not open new trades; also avoid running Python every minute.
+            if (activeTrade != null)
+                continue;
+
+            // Session filter (London + NY): only evaluate/open signals during 08:00-22:00
+            if (!IsInLondonNySession(windowEndTime))
+                continue;
+
             // Ensure we have minimum required context
             if (contextCandles.Count < minContextCandlesM1)
             {
@@ -199,22 +224,6 @@ class Program
             if (windowCount % 100 == 0)
             {
                 logger.LogInformation($"  Processed {windowCount} windows, found {buySignalCount} BUY signals");
-            }
-
-            // Check if there is an active trade and update its outcome based on current candle
-            if (activeTrade != null && activeTrade.Outcome == "Pending")
-            {
-                // Evaluate from the trade's entry point forward (checked every minute)
-                EvaluateActiveTrade(activeTrade, candles, windowEndIndex);
-
-                // If trade is now resolved, clear the active trade lock and switch back to hourly scanning
-                if (activeTrade.Outcome != "Pending")
-                {
-                    logger.LogInformation($"  Trade #{activeTrade.WindowIndex + 1} resolved: {activeTrade.Outcome} | P&L: {activeTrade.ProfitLoss?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
-                    activeTrade = null;
-                    stepSize = STEP_SIZE_HOURLY; // Switch back to hourly scanning
-                    logger.LogInformation($"  Switched back to HOURLY scanning (step size: {stepSize} minutes)");
-                }
             }
 
             // Filter: only BUY signals with IsSignal = true AND no active trade
@@ -316,6 +325,14 @@ class Program
 
         logger.LogInformation($"\nAnalysis complete. Total windows: {windowCount}, BUY signals found: {buySignalCount}");
         return results;
+    }
+
+    private static bool IsInLondonNySession(DateTime timestamp)
+    {
+        // Mirrors ML session filter used during training: london_ny = 08:00..22:00 (UTC approx).
+        // Candle timestamps in this project are typically timezone-naive; we treat their hour as UTC.
+        var hour = timestamp.Hour;
+        return hour >= LondonNyStartHour && hour < LondonNyEndHour;
     }
 
     static void EvaluateActiveTrade(SlidingWindowResult activeTrade, List<Candle> allCandles, int currentWindowEndIndex)

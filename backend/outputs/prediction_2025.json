@@ -1,97 +1,21 @@
 {
   "Summary": {
-    "TotalSignals": 131,
-    "WonTrades": 44,
-    "LostTrades": 85,
+    "TotalSignals": 82,
+    "WonTrades": 28,
+    "LostTrades": 52,
     "PendingTrades": 0,
-    "WinRate": "33,59%",
-    "ProfitabilityRate": "35,11%",
-    "TotalProfitLoss": "4,01284",
-    "AverageWin": "6,4238",
-    "AverageLoss": "-3,41123",
-    "GeneratedAt": "2026-01-08T09:39:16.7883487Z",
+    "WinRate": "34,15%",
+    "ProfitabilityRate": "36,59%",
+    "TotalProfitLoss": "22,3314",
+    "AverageWin": "7,27307",
+    "AverageLoss": "-3,70451",
+    "GeneratedAt": "2026-01-08T09:52:55.4923511Z",
     "ModelThreshold": "64,15%",
     "ModelWinRate": "46,46%"
   },
   "Signals": [
     {
       "WindowIndex": 3,
-      "EntryTime": "2025-12-02 03:24:00",
-      "EntryPrice": "4224.405",
-      "ExitTime": "2025-12-02 03:44:00",
-      "ExitPrice": "4221.06746",
-      "StopLoss": "4221.06746",
-      "TakeProfit": "4231.08008",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.33754",
-      "Probability": "67,52%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.33754",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 4,
-      "EntryTime": "2025-12-02 04:24:00",
-      "EntryPrice": "4217.835",
-      "ExitTime": "2025-12-02 04:40:00",
-      "ExitPrice": "4214.67648",
-      "StopLoss": "4214.67648",
-      "TakeProfit": "4224.15203",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.15852",
-      "Probability": "71,90%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "3.15852",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 5,
-      "EntryTime": "2025-12-02 05:24:00",
-      "EntryPrice": "4222.165",
-      "ExitTime": "2025-12-02 05:35:00",
-      "ExitPrice": "4219.58708",
-      "StopLoss": "4219.58708",
-      "TakeProfit": "4227.32083",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.57792",
-      "Probability": "68,18%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.57792",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 7,
-      "EntryTime": "2025-12-02 07:24:00",
-      "EntryPrice": "4217.305",
-      "ExitTime": "2025-12-02 07:44:00",
-      "ExitPrice": "4212.67379",
-      "StopLoss": "4212.67379",
-      "TakeProfit": "4226.56742",
-      "Outcome": "Loss",
-      "ProfitLoss": "-4.63121",
-      "Probability": "67,58%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "4.63121",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 11,
       "EntryTime": "2025-12-02 11:24:00",
       "EntryPrice": "4190.455",
       "ExitTime": "2025-12-02 11:35:00",
@@ -110,7 +34,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 12,
+      "WindowIndex": 4,
       "EntryTime": "2025-12-02 12:24:00",
       "EntryPrice": "4203.585",
       "ExitTime": "2025-12-02 13:00:00",
@@ -129,7 +53,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 13,
+      "WindowIndex": 5,
       "EntryTime": "2025-12-02 13:24:00",
       "EntryPrice": "4207.465",
       "ExitTime": "2025-12-02 13:35:00",
@@ -148,7 +72,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 14,
+      "WindowIndex": 6,
       "EntryTime": "2025-12-02 14:24:00",
       "EntryPrice": "4224.455",
       "ExitTime": "2025-12-02 14:41:00",
@@ -167,7 +91,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 17,
+      "WindowIndex": 9,
       "EntryTime": "2025-12-02 17:24:00",
       "EntryPrice": "4191.735",
       "ExitTime": "2025-12-02 18:35:00",
@@ -186,7 +110,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 18,
+      "WindowIndex": 10,
       "EntryTime": "2025-12-02 18:24:00",
       "EntryPrice": "4193.325",
       "ExitTime": "2025-12-02 18:34:00",
@@ -205,7 +129,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 19,
+      "WindowIndex": 11,
       "EntryTime": "2025-12-02 19:24:00",
       "EntryPrice": "4194.905",
       "ExitTime": "2025-12-02 20:33:00",
@@ -224,7 +148,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 20,
+      "WindowIndex": 12,
       "EntryTime": "2025-12-02 20:24:00",
       "EntryPrice": "4196.648",
       "ExitTime": "2025-12-02 20:34:00",
@@ -243,121 +167,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 22,
-      "EntryTime": "2025-12-02 23:24:00",
-      "EntryPrice": "4209.885",
-      "ExitTime": "2025-12-02 23:38:00",
-      "ExitPrice": "4206.8195",
-      "StopLoss": "4206.8195",
-      "TakeProfit": "4216.016",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.0655",
-      "Probability": "67,30%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.0655",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 24,
-      "EntryTime": "2025-12-03 01:24:00",
-      "EntryPrice": "4217.595",
-      "ExitTime": "2025-12-03 01:39:00",
-      "ExitPrice": "4213.89547",
-      "StopLoss": "4213.89547",
-      "TakeProfit": "4224.99407",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.69953",
-      "Probability": "69,82%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.69953",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 25,
-      "EntryTime": "2025-12-03 02:24:00",
-      "EntryPrice": "4219.455",
-      "ExitTime": "2025-12-03 02:34:00",
-      "ExitPrice": "4226.53494",
-      "StopLoss": "4215.91503",
-      "TakeProfit": "4226.53494",
-      "Outcome": "Win",
-      "ProfitLoss": "7.07994",
-      "Probability": "68,57%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.53997",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 26,
-      "EntryTime": "2025-12-03 03:24:00",
-      "EntryPrice": "4224.525",
-      "ExitTime": "2025-12-03 03:40:00",
-      "ExitPrice": "4221.05517",
-      "StopLoss": "4221.05517",
-      "TakeProfit": "4231.46466",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.46983",
-      "Probability": "71,72%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "3.46983",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 28,
-      "EntryTime": "2025-12-03 05:24:00",
-      "EntryPrice": "4218.925",
-      "ExitTime": "2025-12-03 05:34:00",
-      "ExitPrice": "4216.71431",
-      "StopLoss": "4216.71431",
-      "TakeProfit": "4223.34639",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.21069",
-      "Probability": "68,38%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.21069",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 30,
-      "EntryTime": "2025-12-03 07:24:00",
-      "EntryPrice": "4205.015",
-      "ExitTime": "2025-12-03 07:34:00",
-      "ExitPrice": "4201.75572",
-      "StopLoss": "4201.75572",
-      "TakeProfit": "4211.53355",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.25928",
-      "Probability": "69,63%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.25928",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 32,
+      "WindowIndex": 15,
       "EntryTime": "2025-12-03 09:24:00",
       "EntryPrice": "4198.808",
       "ExitTime": "2025-12-03 10:12:00",
@@ -376,7 +186,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 33,
+      "WindowIndex": 16,
       "EntryTime": "2025-12-03 10:24:00",
       "EntryPrice": "4198.635",
       "ExitTime": "2025-12-03 11:27:00",
@@ -395,7 +205,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 34,
+      "WindowIndex": 17,
       "EntryTime": "2025-12-03 11:24:00",
       "EntryPrice": "4201.325",
       "ExitTime": "2025-12-03 11:58:00",
@@ -414,7 +224,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 36,
+      "WindowIndex": 19,
       "EntryTime": "2025-12-03 13:24:00",
       "EntryPrice": "4221.215",
       "ExitTime": "2025-12-03 13:35:00",
@@ -433,7 +243,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 41,
+      "WindowIndex": 24,
       "EntryTime": "2025-12-03 18:24:00",
       "EntryPrice": "4200.235",
       "ExitTime": "2025-12-03 18:54:00",
@@ -452,7 +262,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 42,
+      "WindowIndex": 25,
       "EntryTime": "2025-12-03 19:24:00",
       "EntryPrice": "4203.245",
       "ExitTime": "2025-12-03 20:08:00",
@@ -471,7 +281,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 44,
+      "WindowIndex": 27,
       "EntryTime": "2025-12-03 21:24:00",
       "EntryPrice": "4206.725",
       "ExitTime": "2025-12-03 21:54:00",
@@ -490,45 +300,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 45,
-      "EntryTime": "2025-12-03 23:24:00",
-      "EntryPrice": "4208.195",
-      "ExitTime": "2025-12-03 23:34:00",
-      "ExitPrice": "4205.95208",
-      "StopLoss": "4205.95208",
-      "TakeProfit": "4212.68084",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.24292",
-      "Probability": "72,74%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "2.24292",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 51,
-      "EntryTime": "2025-12-04 05:24:00",
-      "EntryPrice": "4192.365",
-      "ExitTime": "2025-12-04 05:36:00",
-      "ExitPrice": "4190.30309",
-      "StopLoss": "4190.30309",
-      "TakeProfit": "4196.48881",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.06191",
-      "Probability": "65,58%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.06191",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 54,
+      "WindowIndex": 28,
       "EntryTime": "2025-12-04 08:24:00",
       "EntryPrice": "4192.795",
       "ExitTime": "2025-12-04 08:51:00",
@@ -547,7 +319,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 56,
+      "WindowIndex": 30,
       "EntryTime": "2025-12-04 10:24:00",
       "EntryPrice": "4200.325",
       "ExitTime": "2025-12-04 10:54:00",
@@ -566,7 +338,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 57,
+      "WindowIndex": 31,
       "EntryTime": "2025-12-04 11:24:00",
       "EntryPrice": "4199.855",
       "ExitTime": "2025-12-04 12:03:00",
@@ -585,7 +357,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 59,
+      "WindowIndex": 33,
       "EntryTime": "2025-12-04 13:24:00",
       "EntryPrice": "4191.355",
       "ExitTime": "2025-12-04 14:00:00",
@@ -604,7 +376,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 60,
+      "WindowIndex": 34,
       "EntryTime": "2025-12-04 14:24:00",
       "EntryPrice": "4209.165",
       "ExitTime": "2025-12-04 14:37:00",
@@ -623,7 +395,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 61,
+      "WindowIndex": 35,
       "EntryTime": "2025-12-04 15:24:00",
       "EntryPrice": "4204.365",
       "ExitTime": "2025-12-04 16:18:00",
@@ -642,7 +414,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 62,
+      "WindowIndex": 36,
       "EntryTime": "2025-12-04 16:24:00",
       "EntryPrice": "4218.625",
       "ExitTime": "2025-12-04 16:34:00",
@@ -661,7 +433,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 63,
+      "WindowIndex": 37,
       "EntryTime": "2025-12-04 17:24:00",
       "EntryPrice": "4211.665",
       "ExitTime": "2025-12-04 18:59:00",
@@ -680,7 +452,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 65,
+      "WindowIndex": 39,
       "EntryTime": "2025-12-04 19:24:00",
       "EntryPrice": "4201.705",
       "ExitTime": "2025-12-04 19:35:00",
@@ -699,7 +471,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 66,
+      "WindowIndex": 40,
       "EntryTime": "2025-12-04 20:24:00",
       "EntryPrice": "4209.025",
       "ExitTime": "2025-12-04 20:34:00",
@@ -718,45 +490,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 72,
-      "EntryTime": "2025-12-05 03:24:00",
-      "EntryPrice": "4204.485",
-      "ExitTime": "2025-12-05 03:55:00",
-      "ExitPrice": "4210.30992",
-      "StopLoss": "4201.57254",
-      "TakeProfit": "4210.30992",
-      "Outcome": "Win",
-      "ProfitLoss": "5.82492",
-      "Probability": "68,45%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.91246",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 74,
-      "EntryTime": "2025-12-05 05:24:00",
-      "EntryPrice": "4215.965",
-      "ExitTime": "2025-12-05 05:39:00",
-      "ExitPrice": "4219.77073",
-      "StopLoss": "4214.06213",
-      "TakeProfit": "4219.77073",
-      "Outcome": "Win",
-      "ProfitLoss": "3.80573",
-      "Probability": "64,45%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "1.90287",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 77,
+      "WindowIndex": 42,
       "EntryTime": "2025-12-05 08:24:00",
       "EntryPrice": "4226.148",
       "ExitTime": "2025-12-05 08:40:00",
@@ -775,7 +509,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 78,
+      "WindowIndex": 43,
       "EntryTime": "2025-12-05 09:24:00",
       "EntryPrice": "4218.675",
       "ExitTime": "2025-12-05 09:39:00",
@@ -794,7 +528,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 79,
+      "WindowIndex": 44,
       "EntryTime": "2025-12-05 10:24:00",
       "EntryPrice": "4226.315",
       "ExitTime": "2025-12-05 10:36:00",
@@ -813,7 +547,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 80,
+      "WindowIndex": 45,
       "EntryTime": "2025-12-05 11:24:00",
       "EntryPrice": "4224.765",
       "ExitTime": "2025-12-05 11:34:00",
@@ -832,7 +566,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 81,
+      "WindowIndex": 46,
       "EntryTime": "2025-12-05 12:24:00",
       "EntryPrice": "4225.915",
       "ExitTime": "2025-12-05 12:40:00",
@@ -851,7 +585,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 84,
+      "WindowIndex": 49,
       "EntryTime": "2025-12-05 15:24:00",
       "EntryPrice": "4247.515",
       "ExitTime": "2025-12-05 15:39:00",
@@ -870,7 +604,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 88,
+      "WindowIndex": 53,
       "EntryTime": "2025-12-05 19:24:00",
       "EntryPrice": "4206.465",
       "ExitTime": "2025-12-05 19:47:00",
@@ -889,7 +623,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 89,
+      "WindowIndex": 54,
       "EntryTime": "2025-12-05 20:24:00",
       "EntryPrice": "4205.185",
       "ExitTime": "2025-12-05 20:38:00",
@@ -908,102 +642,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 91,
-      "EntryTime": "2025-12-08 00:24:00",
-      "EntryPrice": "4205.515",
-      "ExitTime": "2025-12-08 01:01:00",
-      "ExitPrice": "4201.92718",
-      "StopLoss": "4201.92718",
-      "TakeProfit": "4212.69064",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.58782",
-      "Probability": "66,89%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.58782",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 92,
-      "EntryTime": "2025-12-08 01:24:00",
-      "EntryPrice": "4209.055",
-      "ExitTime": "2025-12-08 01:41:00",
-      "ExitPrice": "4205.36628",
-      "StopLoss": "4205.36628",
-      "TakeProfit": "4216.43244",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.68872",
-      "Probability": "67,26%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.68872",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 94,
-      "EntryTime": "2025-12-08 03:24:00",
-      "EntryPrice": "4210.095",
-      "ExitTime": "2025-12-08 05:19:00",
-      "ExitPrice": "4206.60846",
-      "StopLoss": "4206.60846",
-      "TakeProfit": "4217.06807",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.48654",
-      "Probability": "65,19%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.48654",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 95,
-      "EntryTime": "2025-12-08 04:24:00",
-      "EntryPrice": "4210.075",
-      "ExitTime": "2025-12-08 04:56:00",
-      "ExitPrice": "4207.84973",
-      "StopLoss": "4207.84973",
-      "TakeProfit": "4214.52554",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.22527",
-      "Probability": "66,48%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.22527",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 97,
-      "EntryTime": "2025-12-08 06:24:00",
-      "EntryPrice": "4217.265",
-      "ExitTime": "2025-12-08 07:06:00",
-      "ExitPrice": "4213.60352",
-      "StopLoss": "4213.60352",
-      "TakeProfit": "4224.58796",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.66148",
-      "Probability": "72,64%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "3.66148",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 99,
+      "WindowIndex": 56,
       "EntryTime": "2025-12-08 08:24:00",
       "EntryPrice": "4214.905",
       "ExitTime": "2025-12-08 08:34:00",
@@ -1022,7 +661,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 102,
+      "WindowIndex": 59,
       "EntryTime": "2025-12-08 11:24:00",
       "EntryPrice": "4205.805",
       "ExitTime": "2025-12-08 11:36:00",
@@ -1041,7 +680,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 107,
+      "WindowIndex": 64,
       "EntryTime": "2025-12-08 16:24:00",
       "EntryPrice": "4192.385",
       "ExitTime": "2025-12-08 17:03:00",
@@ -1060,7 +699,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 108,
+      "WindowIndex": 65,
       "EntryTime": "2025-12-08 17:24:00",
       "EntryPrice": "4190.345",
       "ExitTime": "2025-12-08 18:56:00",
@@ -1079,7 +718,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 109,
+      "WindowIndex": 66,
       "EntryTime": "2025-12-08 18:24:00",
       "EntryPrice": "4188.305",
       "ExitTime": "2025-12-08 18:56:00",
@@ -1098,7 +737,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 110,
+      "WindowIndex": 67,
       "EntryTime": "2025-12-08 19:24:00",
       "EntryPrice": "4187.085",
       "ExitTime": "2025-12-08 20:33:00",
@@ -1117,7 +756,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 111,
+      "WindowIndex": 68,
       "EntryTime": "2025-12-08 20:24:00",
       "EntryPrice": "4189.445",
       "ExitTime": "2025-12-08 20:40:00",
@@ -1136,7 +775,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 112,
+      "WindowIndex": 69,
       "EntryTime": "2025-12-08 21:24:00",
       "EntryPrice": "4192.285",
       "ExitTime": "2025-12-08 21:34:00",
@@ -1155,83 +794,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 113,
-      "EntryTime": "2025-12-08 23:24:00",
-      "EntryPrice": "4192.085",
-      "ExitTime": "2025-12-08 23:56:00",
-      "ExitPrice": "4195.05926",
-      "StopLoss": "4190.59787",
-      "TakeProfit": "4195.05926",
-      "Outcome": "Win",
-      "ProfitLoss": "2.97426",
-      "Probability": "69,21%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "1.48713",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 115,
-      "EntryTime": "2025-12-09 01:24:00",
-      "EntryPrice": "4194.055",
-      "ExitTime": "2025-12-09 02:11:00",
-      "ExitPrice": "4191.77434",
-      "StopLoss": "4191.77434",
-      "TakeProfit": "4198.61631",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.28066",
-      "Probability": "64,34%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.28066",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 116,
-      "EntryTime": "2025-12-09 02:24:00",
-      "EntryPrice": "4191.725",
-      "ExitTime": "2025-12-09 02:34:00",
-      "ExitPrice": "4189.40821",
-      "StopLoss": "4189.40821",
-      "TakeProfit": "4196.35858",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.31679",
-      "Probability": "68,07%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.31679",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 117,
-      "EntryTime": "2025-12-09 03:24:00",
-      "EntryPrice": "4197.155",
-      "ExitTime": "2025-12-09 03:38:00",
-      "ExitPrice": "4194.56711",
-      "StopLoss": "4194.56711",
-      "TakeProfit": "4202.33078",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.58789",
-      "Probability": "73,17%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "2.58789",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 123,
+      "WindowIndex": 71,
       "EntryTime": "2025-12-09 09:24:00",
       "EntryPrice": "4209.248",
       "ExitTime": "2025-12-09 09:34:00",
@@ -1250,7 +813,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 124,
+      "WindowIndex": 72,
       "EntryTime": "2025-12-09 10:24:00",
       "EntryPrice": "4206.475",
       "ExitTime": "2025-12-09 10:39:00",
@@ -1269,7 +832,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 125,
+      "WindowIndex": 73,
       "EntryTime": "2025-12-09 11:24:00",
       "EntryPrice": "4204.565",
       "ExitTime": "2025-12-09 12:10:00",
@@ -1288,7 +851,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 127,
+      "WindowIndex": 75,
       "EntryTime": "2025-12-09 13:24:00",
       "EntryPrice": "4205.265",
       "ExitTime": "2025-12-09 13:34:00",
@@ -1307,7 +870,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 129,
+      "WindowIndex": 77,
       "EntryTime": "2025-12-09 15:24:00",
       "EntryPrice": "4203.685",
       "ExitTime": "2025-12-09 16:05:00",
@@ -1326,7 +889,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 132,
+      "WindowIndex": 80,
       "EntryTime": "2025-12-09 18:24:00",
       "EntryPrice": "4207.118",
       "ExitTime": "2025-12-09 19:56:00",
@@ -1345,7 +908,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 135,
+      "WindowIndex": 83,
       "EntryTime": "2025-12-09 21:24:00",
       "EntryPrice": "4209.835",
       "ExitTime": "2025-12-09 21:55:00",
@@ -1364,64 +927,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 136,
-      "EntryTime": "2025-12-09 23:24:00",
-      "EntryPrice": "4208.025",
-      "ExitTime": "2025-12-09 23:45:00",
-      "ExitPrice": "4211.66437",
-      "StopLoss": "4206.20532",
-      "TakeProfit": "4211.66437",
-      "Outcome": "Win",
-      "ProfitLoss": "3.63937",
-      "Probability": "68,17%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "1.81968",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 138,
-      "EntryTime": "2025-12-10 01:24:00",
-      "EntryPrice": "4215.105",
-      "ExitTime": "2025-12-10 01:42:00",
-      "ExitPrice": "4212.7534",
-      "StopLoss": "4212.7534",
-      "TakeProfit": "4219.80819",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.3516",
-      "Probability": "70,67%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "2.3516",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 142,
-      "EntryTime": "2025-12-10 05:24:00",
-      "EntryPrice": "4203.895",
-      "ExitTime": "2025-12-10 05:34:00",
-      "ExitPrice": "4207.7285",
-      "StopLoss": "4201.97825",
-      "TakeProfit": "4207.7285",
-      "Outcome": "Win",
-      "ProfitLoss": "3.8335",
-      "Probability": "66,80%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "1.91675",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 150,
+      "WindowIndex": 89,
       "EntryTime": "2025-12-10 13:24:00",
       "EntryPrice": "4197.085",
       "ExitTime": "2025-12-10 13:46:00",
@@ -1440,7 +946,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 153,
+      "WindowIndex": 92,
       "EntryTime": "2025-12-10 16:24:00",
       "EntryPrice": "4197.235",
       "ExitTime": "2025-12-10 16:49:00",
@@ -1459,7 +965,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 154,
+      "WindowIndex": 93,
       "EntryTime": "2025-12-10 17:24:00",
       "EntryPrice": "4201.125",
       "ExitTime": "2025-12-10 17:36:00",
@@ -1478,7 +984,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 155,
+      "WindowIndex": 94,
       "EntryTime": "2025-12-10 18:24:00",
       "EntryPrice": "4195.965",
       "ExitTime": "2025-12-10 18:39:00",
@@ -1497,7 +1003,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 156,
+      "WindowIndex": 95,
       "EntryTime": "2025-12-10 19:24:00",
       "EntryPrice": "4209.905",
       "ExitTime": "2025-12-10 19:36:00",
@@ -1516,7 +1022,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 157,
+      "WindowIndex": 96,
       "EntryTime": "2025-12-10 20:24:00",
       "EntryPrice": "4233.075",
       "ExitTime": "2025-12-11 02:23:00",
@@ -1535,83 +1041,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 162,
-      "EntryTime": "2025-12-11 02:24:00",
-      "EntryPrice": "4233.505",
-      "ExitTime": "2025-12-11 02:34:00",
-      "ExitPrice": "4230.31262",
-      "StopLoss": "4230.31262",
-      "TakeProfit": "4239.88977",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.19238",
-      "Probability": "65,23%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.19238",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 165,
-      "EntryTime": "2025-12-11 05:24:00",
-      "EntryPrice": "4211.225",
-      "ExitTime": "2025-12-11 05:39:00",
-      "ExitPrice": "4208.44584",
-      "StopLoss": "4208.44584",
-      "TakeProfit": "4216.78331",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.77916",
-      "Probability": "67,57%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.77916",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 166,
-      "EntryTime": "2025-12-11 06:24:00",
-      "EntryPrice": "4211.405",
-      "ExitTime": "2025-12-11 07:48:00",
-      "ExitPrice": "4218.40835",
-      "StopLoss": "4207.90333",
-      "TakeProfit": "4218.40835",
-      "Outcome": "Win",
-      "ProfitLoss": "7.00335",
-      "Probability": "70,15%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "3.50167",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 167,
-      "EntryTime": "2025-12-11 07:24:00",
-      "EntryPrice": "4212.645",
-      "ExitTime": "2025-12-11 07:45:00",
-      "ExitPrice": "4217.99217",
-      "StopLoss": "4209.97142",
-      "TakeProfit": "4217.99217",
-      "Outcome": "Win",
-      "ProfitLoss": "5.34717",
-      "Probability": "67,91%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.67358",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 168,
+      "WindowIndex": 98,
       "EntryTime": "2025-12-11 08:24:00",
       "EntryPrice": "4216.115",
       "ExitTime": "2025-12-11 09:03:00",
@@ -1630,7 +1060,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 169,
+      "WindowIndex": 99,
       "EntryTime": "2025-12-11 09:24:00",
       "EntryPrice": "4215.405",
       "ExitTime": "2025-12-11 10:03:00",
@@ -1649,7 +1079,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 172,
+      "WindowIndex": 102,
       "EntryTime": "2025-12-11 12:24:00",
       "EntryPrice": "4216.485",
       "ExitTime": "2025-12-11 13:00:00",
@@ -1668,7 +1098,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 174,
+      "WindowIndex": 104,
       "EntryTime": "2025-12-11 14:24:00",
       "EntryPrice": "4230.225",
       "ExitTime": "2025-12-11 14:37:00",
@@ -1687,7 +1117,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 181,
+      "WindowIndex": 111,
       "EntryTime": "2025-12-11 21:24:00",
       "EntryPrice": "4277.898",
       "ExitTime": "2025-12-11 23:39:00",
@@ -1706,83 +1136,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 183,
-      "EntryTime": "2025-12-12 00:24:00",
-      "EntryPrice": "4278.455",
-      "ExitTime": "2025-12-12 00:36:00",
-      "ExitPrice": "4274.89159",
-      "StopLoss": "4274.89159",
-      "TakeProfit": "4285.58181",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.56341",
-      "Probability": "64,82%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.56341",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 187,
-      "EntryTime": "2025-12-12 04:24:00",
-      "EntryPrice": "4267.775",
-      "ExitTime": "2025-12-12 05:21:00",
-      "ExitPrice": "4272.23405",
-      "StopLoss": "4265.54547",
-      "TakeProfit": "4272.23405",
-      "Outcome": "Win",
-      "ProfitLoss": "4.45905",
-      "Probability": "65,08%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.22953",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 188,
-      "EntryTime": "2025-12-12 05:24:00",
-      "EntryPrice": "4271.565",
-      "ExitTime": "2025-12-12 05:34:00",
-      "ExitPrice": "4275.28256",
-      "StopLoss": "4269.70622",
-      "TakeProfit": "4275.28256",
-      "Outcome": "Win",
-      "ProfitLoss": "3.71756",
-      "Probability": "69,89%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "1.85878",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 189,
-      "EntryTime": "2025-12-12 06:24:00",
-      "EntryPrice": "4279.375",
-      "ExitTime": "2025-12-12 07:07:00",
-      "ExitPrice": "4284.70919",
-      "StopLoss": "4276.7079",
-      "TakeProfit": "4284.70919",
-      "Outcome": "Win",
-      "ProfitLoss": "5.33419",
-      "Probability": "69,63%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.6671",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 201,
+      "WindowIndex": 122,
       "EntryTime": "2025-12-12 18:24:00",
       "EntryPrice": "4296.035",
       "ExitTime": "2025-12-12 19:02:00",
@@ -1801,7 +1155,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 202,
+      "WindowIndex": 123,
       "EntryTime": "2025-12-12 19:24:00",
       "EntryPrice": "4296.145",
       "ExitTime": "2025-12-12 20:26:00",
@@ -1820,7 +1174,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 204,
+      "WindowIndex": 125,
       "EntryTime": "2025-12-12 21:24:00",
       "EntryPrice": "4303.075",
       "ExitTime": "2025-12-12 21:56:00",
@@ -1839,64 +1193,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 205,
-      "EntryTime": "2025-12-15 00:24:00",
-      "EntryPrice": "4301.725",
-      "ExitTime": "2025-12-15 01:00:00",
-      "ExitPrice": "4307.83235",
-      "StopLoss": "4298.67132",
-      "TakeProfit": "4307.83235",
-      "Outcome": "Win",
-      "ProfitLoss": "6.10735",
-      "Probability": "70,14%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "3.05368",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 210,
-      "EntryTime": "2025-12-15 05:24:00",
-      "EntryPrice": "4328.505",
-      "ExitTime": "2025-12-15 05:34:00",
-      "ExitPrice": "4332.8408",
-      "StopLoss": "4326.3371",
-      "TakeProfit": "4332.8408",
-      "Outcome": "Win",
-      "ProfitLoss": "4.3358",
-      "Probability": "64,15%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.1679",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 211,
-      "EntryTime": "2025-12-15 06:24:00",
-      "EntryPrice": "4343.635",
-      "ExitTime": "2025-12-15 07:35:00",
-      "ExitPrice": "4340.07759",
-      "StopLoss": "4340.07759",
-      "TakeProfit": "4350.74982",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.55741",
-      "Probability": "64,90%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.55741",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 215,
+      "WindowIndex": 128,
       "EntryTime": "2025-12-15 10:24:00",
       "EntryPrice": "4344.835",
       "ExitTime": "2025-12-15 10:34:00",
@@ -1915,7 +1212,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 223,
+      "WindowIndex": 136,
       "EntryTime": "2025-12-15 18:24:00",
       "EntryPrice": "4303.075",
       "ExitTime": "2025-12-15 18:45:00",
@@ -1934,7 +1231,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 224,
+      "WindowIndex": 137,
       "EntryTime": "2025-12-15 19:24:00",
       "EntryPrice": "4312.138",
       "ExitTime": "2025-12-15 20:20:00",
@@ -1953,83 +1250,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 227,
-      "EntryTime": "2025-12-15 23:24:00",
-      "EntryPrice": "4309.015",
-      "ExitTime": "2025-12-15 23:37:00",
-      "ExitPrice": "4306.94064",
-      "StopLoss": "4306.94064",
-      "TakeProfit": "4313.16372",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.07436",
-      "Probability": "69,84%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.07436",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 229,
-      "EntryTime": "2025-12-16 01:24:00",
-      "EntryPrice": "4306.805",
-      "ExitTime": "2025-12-16 01:34:00",
-      "ExitPrice": "4313.63794",
-      "StopLoss": "4303.38853",
-      "TakeProfit": "4313.63794",
-      "Outcome": "Win",
-      "ProfitLoss": "6.83294",
-      "Probability": "65,53%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.41647",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 233,
-      "EntryTime": "2025-12-16 05:24:00",
-      "EntryPrice": "4284.225",
-      "ExitTime": "2025-12-16 05:34:00",
-      "ExitPrice": "4281.79873",
-      "StopLoss": "4281.79873",
-      "TakeProfit": "4289.07754",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.42627",
-      "Probability": "72,49%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "2.42627",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 234,
-      "EntryTime": "2025-12-16 06:24:00",
-      "EntryPrice": "4288.375",
-      "ExitTime": "2025-12-16 07:16:00",
-      "ExitPrice": "4284.25495",
-      "StopLoss": "4284.25495",
-      "TakeProfit": "4296.61509",
-      "Outcome": "Loss",
-      "ProfitLoss": "-4.12005",
-      "Probability": "72,69%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "4.12005",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 238,
+      "WindowIndex": 142,
       "EntryTime": "2025-12-16 10:24:00",
       "EntryPrice": "4281.185",
       "ExitTime": "2025-12-16 10:34:00",
@@ -2048,7 +1269,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 239,
+      "WindowIndex": 143,
       "EntryTime": "2025-12-16 11:24:00",
       "EntryPrice": "4276.235",
       "ExitTime": "2025-12-16 12:06:00",
@@ -2067,7 +1288,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 240,
+      "WindowIndex": 144,
       "EntryTime": "2025-12-16 12:24:00",
       "EntryPrice": "4291.205",
       "ExitTime": "2025-12-16 12:37:00",
@@ -2086,7 +1307,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 241,
+      "WindowIndex": 145,
       "EntryTime": "2025-12-16 13:24:00",
       "EntryPrice": "4300.478",
       "ExitTime": "2025-12-16 13:34:00",
@@ -2105,7 +1326,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 245,
+      "WindowIndex": 149,
       "EntryTime": "2025-12-16 17:24:00",
       "EntryPrice": "4304.345",
       "ExitTime": "2025-12-16 18:22:00",
@@ -2124,7 +1345,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 247,
+      "WindowIndex": 151,
       "EntryTime": "2025-12-16 19:24:00",
       "EntryPrice": "4308.645",
       "ExitTime": "2025-12-16 19:35:00",
@@ -2143,7 +1364,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 249,
+      "WindowIndex": 153,
       "EntryTime": "2025-12-16 21:24:00",
       "EntryPrice": "4301.665",
       "ExitTime": "2025-12-16 23:42:00",
@@ -2162,64 +1383,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 250,
-      "EntryTime": "2025-12-16 23:24:00",
-      "EntryPrice": "4304.455",
-      "ExitTime": "2025-12-16 23:45:00",
-      "ExitPrice": "4308.29289",
-      "StopLoss": "4302.53605",
-      "TakeProfit": "4308.29289",
-      "Outcome": "Win",
-      "ProfitLoss": "3.83789",
-      "Probability": "67,82%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "1.91895",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 251,
-      "EntryTime": "2025-12-17 00:24:00",
-      "EntryPrice": "4314.165",
-      "ExitTime": "2025-12-17 00:34:00",
-      "ExitPrice": "4312.2403",
-      "StopLoss": "4312.2403",
-      "TakeProfit": "4318.0144",
-      "Outcome": "Loss",
-      "ProfitLoss": "-1.9247",
-      "Probability": "66,50%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "1.9247",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 256,
-      "EntryTime": "2025-12-17 05:24:00",
-      "EntryPrice": "4335.875",
-      "ExitTime": "2025-12-17 06:02:00",
-      "ExitPrice": "4332.64791",
-      "StopLoss": "4332.64791",
-      "TakeProfit": "4342.32917",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.22709",
-      "Probability": "64,93%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.22709",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 261,
+      "WindowIndex": 156,
       "EntryTime": "2025-12-17 10:24:00",
       "EntryPrice": "4320.945",
       "ExitTime": "2025-12-17 10:34:00",
@@ -2238,7 +1402,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 263,
+      "WindowIndex": 158,
       "EntryTime": "2025-12-17 12:24:00",
       "EntryPrice": "4320.925",
       "ExitTime": "2025-12-17 12:35:00",
@@ -2257,7 +1421,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 264,
+      "WindowIndex": 159,
       "EntryTime": "2025-12-17 13:24:00",
       "EntryPrice": "4330.245",
       "ExitTime": "2025-12-17 13:41:00",
@@ -2276,7 +1440,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 268,
+      "WindowIndex": 163,
       "EntryTime": "2025-12-17 17:24:00",
       "EntryPrice": "4337.465",
       "ExitTime": "2025-12-17 18:42:00",
@@ -2295,7 +1459,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 269,
+      "WindowIndex": 164,
       "EntryTime": "2025-12-17 18:24:00",
       "EntryPrice": "4341.855",
       "ExitTime": "2025-12-17 18:38:00",
@@ -2314,7 +1478,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 272,
+      "WindowIndex": 167,
       "EntryTime": "2025-12-17 21:24:00",
       "EntryPrice": "4344.405",
       "ExitTime": "2025-12-17 21:34:00",
@@ -2333,102 +1497,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 273,
-      "EntryTime": "2025-12-17 23:25:00",
-      "EntryPrice": "4337.205",
-      "ExitTime": "2025-12-17 23:53:00",
-      "ExitPrice": "4342.07309",
-      "StopLoss": "4334.77095",
-      "TakeProfit": "4342.07309",
-      "Outcome": "Win",
-      "ProfitLoss": "4.86809",
-      "Probability": "72,57%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "2.43405",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 274,
-      "EntryTime": "2025-12-18 00:25:00",
-      "EntryPrice": "4337.975",
-      "ExitTime": "2025-12-18 00:49:00",
-      "ExitPrice": "4335.22678",
-      "StopLoss": "4335.22678",
-      "TakeProfit": "4343.47144",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.74822",
-      "Probability": "68,86%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.74822",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 276,
-      "EntryTime": "2025-12-18 02:25:00",
-      "EntryPrice": "4334.045",
-      "ExitTime": "2025-12-18 02:50:00",
-      "ExitPrice": "4330.72287",
-      "StopLoss": "4330.72287",
-      "TakeProfit": "4340.68925",
-      "Outcome": "Loss",
-      "ProfitLoss": "-3.32213",
-      "Probability": "69,69%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "3.32213",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 278,
-      "EntryTime": "2025-12-18 04:25:00",
-      "EntryPrice": "4331.805",
-      "ExitTime": "2025-12-18 04:36:00",
-      "ExitPrice": "4329.66999",
-      "StopLoss": "4329.66999",
-      "TakeProfit": "4336.07502",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.13501",
-      "Probability": "65,12%",
-      "Threshold": "64,15%",
-      "Confidence": "medium",
-      "AtrM5": "2.13501",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 281,
-      "EntryTime": "2025-12-18 07:25:00",
-      "EntryPrice": "4331.755",
-      "ExitTime": "2025-12-18 08:02:00",
-      "ExitPrice": "4329.4071",
-      "StopLoss": "4329.4071",
-      "TakeProfit": "4336.4508",
-      "Outcome": "Loss",
-      "ProfitLoss": "-2.3479",
-      "Probability": "72,01%",
-      "Threshold": "64,15%",
-      "Confidence": "high",
-      "AtrM5": "2.3479",
-      "SlAtrMultiplier": "1",
-      "TpAtrMultiplier": "2",
-      "RiskRewardRatio": "2",
-      "ExpectedWinRate": "46,46%"
-    },
-    {
-      "WindowIndex": 287,
+      "WindowIndex": 173,
       "EntryTime": "2025-12-18 13:25:00",
       "EntryPrice": "4319.705",
       "ExitTime": "2025-12-18 13:35:00",
@@ -2447,7 +1516,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 288,
+      "WindowIndex": 174,
       "EntryTime": "2025-12-18 14:25:00",
       "EntryPrice": "4334.895",
       "ExitTime": "2025-12-18 14:37:00",
@@ -2466,7 +1535,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 290,
+      "WindowIndex": 176,
       "EntryTime": "2025-12-18 16:25:00",
       "EntryPrice": "4367.499",
       "ExitTime": "2025-12-18 16:53:00",
@@ -2485,7 +1554,7 @@
       "ExpectedWinRate": "46,46%"
     },
     {
-      "WindowIndex": 291,
+      "WindowIndex": 177,
       "EntryTime": "2025-12-18 17:25:00",
       "EntryPrice": "4326.025",
       "ExitTime": "2025-12-18 17:39:00",
