@@ -1,16 +1,16 @@
 {
-  "threshold": 0.8041562569141388,
-  "win_rate": 0.7801583605030274,
+  "threshold": 0.6414810717105865,
+  "win_rate": 0.4646347138203816,
   "window_size": 80,
   "analysis_window_days": 7,
-  "n_features_per_candle": 32,
-  "total_features": 2560,
+  "n_features_per_candle": 36,
+  "total_features": 2880,
   "recommended_min_candles_m5": 280,
   "recommended_min_candles_m1": 1400,
   "recommended_analysis_candles_m1": 10080,
   "max_trades_per_day": 150,
-  "min_precision": 0.7,
-  "min_recall": 0.3,
+  "min_precision": 0.45,
+  "min_recall": 0.6,
   "threshold_strategy": "hybrid",
   "feature_version": "v1"
 }

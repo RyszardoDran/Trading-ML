@@ -19,6 +19,8 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
+from .training.sequence_xgb_params import available_profiles
+
 logger = logging.getLogger(__name__)
 
 
@@ -124,6 +126,20 @@ class PipelineParams:
     # Pullback filter
     enable_pullback_filter: bool
     pullback_max_rsi_m5: Optional[float]
+
+    # XGBoost hyperparameters
+    xgb_profile: str
+    xgb_learning_rate: Optional[float]
+    xgb_max_depth: Optional[int]
+    xgb_min_child_weight: Optional[float]
+    xgb_subsample: Optional[float]
+    xgb_colsample_bytree: Optional[float]
+    xgb_colsample_bynode: Optional[float]
+    xgb_reg_lambda: Optional[float]
+    xgb_reg_alpha: Optional[float]
+    xgb_gamma: Optional[float]
+    xgb_n_estimators: Optional[int]
+    xgb_max_delta_step: Optional[float]
     
     @classmethod
     def from_cli_args(cls, args) -> PipelineParams:
@@ -167,6 +183,18 @@ class PipelineParams:
             trend_min_adx=None if args.disable_trend_filter else args.trend_min_adx,
             enable_pullback_filter=not args.disable_pullback_filter,
             pullback_max_rsi_m5=None if args.disable_pullback_filter else args.pullback_max_rsi_m5,
+            xgb_profile=args.xgb_profile,
+            xgb_learning_rate=args.xgb_learning_rate,
+            xgb_max_depth=args.xgb_max_depth,
+            xgb_min_child_weight=args.xgb_min_child_weight,
+            xgb_subsample=args.xgb_subsample,
+            xgb_colsample_bytree=args.xgb_colsample_bytree,
+            xgb_colsample_bynode=args.xgb_colsample_bynode,
+            xgb_reg_lambda=args.xgb_reg_lambda,
+            xgb_reg_alpha=args.xgb_reg_alpha,
+            xgb_gamma=args.xgb_gamma,
+            xgb_n_estimators=args.xgb_n_estimators,
+            xgb_max_delta_step=args.xgb_max_delta_step,
         )
     
     def validate(self) -> None:
@@ -266,5 +294,70 @@ class PipelineParams:
                     raise ValueError(
                         f"pullback_max_rsi_m5 must be in [0, 100] or None, got {self.pullback_max_rsi_m5}"
                     )
+
+        # XGBoost profile validation
+        valid_profiles = set(available_profiles())
+        if self.xgb_profile not in valid_profiles:
+            raise ValueError(
+                f"xgb_profile must be one of {sorted(valid_profiles)}, got {self.xgb_profile}"
+            )
+
+        if self.xgb_learning_rate is not None and self.xgb_learning_rate <= 0:
+            raise ValueError(
+                f"xgb_learning_rate must be > 0 when set, got {self.xgb_learning_rate}"
+            )
+
+        if self.xgb_max_depth is not None and self.xgb_max_depth < 1:
+            raise ValueError(
+                f"xgb_max_depth must be >= 1 when set, got {self.xgb_max_depth}"
+            )
+
+        if self.xgb_min_child_weight is not None and self.xgb_min_child_weight <= 0:
+            raise ValueError(
+                f"xgb_min_child_weight must be > 0 when set, got {self.xgb_min_child_weight}"
+            )
+
+        if self.xgb_subsample is not None:
+            if not (0 < self.xgb_subsample <= 1):
+                raise ValueError(
+                    f"xgb_subsample must be in (0, 1], got {self.xgb_subsample}"
+                )
+
+        if self.xgb_colsample_bytree is not None:
+            if not (0 < self.xgb_colsample_bytree <= 1):
+                raise ValueError(
+                    f"xgb_colsample_bytree must be in (0, 1], got {self.xgb_colsample_bytree}"
+                )
+
+        if self.xgb_colsample_bynode is not None:
+            if not (0 < self.xgb_colsample_bynode <= 1):
+                raise ValueError(
+                    f"xgb_colsample_bynode must be in (0, 1], got {self.xgb_colsample_bynode}"
+                )
+
+        if self.xgb_reg_lambda is not None and self.xgb_reg_lambda < 0:
+            raise ValueError(
+                f"xgb_reg_lambda must be >= 0 when set, got {self.xgb_reg_lambda}"
+            )
+
+        if self.xgb_reg_alpha is not None and self.xgb_reg_alpha < 0:
+            raise ValueError(
+                f"xgb_reg_alpha must be >= 0 when set, got {self.xgb_reg_alpha}"
+            )
+
+        if self.xgb_gamma is not None and self.xgb_gamma < 0:
+            raise ValueError(
+                f"xgb_gamma must be >= 0 when set, got {self.xgb_gamma}"
+            )
+
+        if self.xgb_n_estimators is not None and self.xgb_n_estimators < 50:
+            raise ValueError(
+                f"xgb_n_estimators must be >= 50 when set, got {self.xgb_n_estimators}"
+            )
+
+        if self.xgb_max_delta_step is not None and self.xgb_max_delta_step < 0:
+            raise ValueError(
+                f"xgb_max_delta_step must be >= 0 when set, got {self.xgb_max_delta_step}"
+            )
         
         logger.info("Pipeline configuration validated successfully")

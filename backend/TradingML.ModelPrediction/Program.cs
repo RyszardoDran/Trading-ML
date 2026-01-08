@@ -136,7 +136,9 @@ class Program
         // Model uses M5 candles, but backend receives M1 candles
         // Convert window size: 80 M5 candles = 400 M1 candles = 400 minutes
         int windowSizeMinutes = metadata.WindowSize * 5; // M5 to M1 conversion
-        const int STEP_SIZE = 60; // Move 1 candle at a time (1 minute steps)
+        int stepSize = 60; // Start with 60-minute steps (hourly scanning)
+        const int STEP_SIZE_HOURLY = 60; // Move 60 candles at a time (hourly steps)
+        const int STEP_SIZE_MINUTE = 1;  // Move 1 candle at a time (minute steps when trade active)
 
         var results = new List<SlidingWindowResult>();
 
@@ -146,8 +148,9 @@ class Program
             return results;
         }
 
-        logger.LogInformation($"Starting sliding window analysis: {candles.Count} candles, window size: {windowSizeMinutes} minutes ({metadata.WindowSize} M5 candles), step: {STEP_SIZE}");
-        logger.LogInformation($"Total windows: {candles.Count - windowSizeMinutes + 1}");
+        var totalWindows = Math.Max(0, ((candles.Count - windowSizeMinutes) / STEP_SIZE_HOURLY) + 1);
+        logger.LogInformation($"Starting sliding window analysis: {candles.Count} candles, window size: {windowSizeMinutes} minutes ({metadata.WindowSize} M5 candles), step: {STEP_SIZE_HOURLY} (hourly)");
+        logger.LogInformation($"Total windows (hourly estimate): {totalWindows}");
         Console.WriteLine();
 
         int windowCount = 0;
@@ -159,12 +162,15 @@ class Program
         int prediction1ButNotSignal = 0;
         var probabilities = new List<double>();
 
+        // Track active trade to prevent opening multiple trades simultaneously
+        SlidingWindowResult? activeTrade = null;
+
         // Start sliding window from where we have enough context for indicator calculation
         int minContextCandlesM5 = Math.Max(metadata.RecommendedMinCandles, metadata.WindowSize + 200); // M5 candles
         int minContextCandlesM1 = minContextCandlesM5 * 5; // Convert to M1 candles
         int startIndex = Math.Max(0, minContextCandlesM1 - windowSizeMinutes);
 
-        for (int i = startIndex; i <= candles.Count - windowSizeMinutes; i += STEP_SIZE)
+        for (int i = startIndex; i <= candles.Count - windowSizeMinutes; i += stepSize)
         {
             // Get current window - send ALL candles up to window end for proper indicator calculation
             var windowEndIndex = i + windowSizeMinutes - 1;
@@ -195,14 +201,31 @@ class Program
                 logger.LogInformation($"  Processed {windowCount} windows, found {buySignalCount} BUY signals");
             }
 
-            // Filter: only BUY signals with IsSignal = true
-            if (result.IsSignal && result.Prediction == 1)
+            // Check if there is an active trade and update its outcome based on current candle
+            if (activeTrade != null && activeTrade.Outcome == "Pending")
+            {
+                // Evaluate from the trade's entry point forward (checked every minute)
+                EvaluateActiveTrade(activeTrade, candles, windowEndIndex);
+
+                // If trade is now resolved, clear the active trade lock and switch back to hourly scanning
+                if (activeTrade.Outcome != "Pending")
+                {
+                    logger.LogInformation($"  Trade #{activeTrade.WindowIndex + 1} resolved: {activeTrade.Outcome} | P&L: {activeTrade.ProfitLoss?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
+                    activeTrade = null;
+                    stepSize = STEP_SIZE_HOURLY; // Switch back to hourly scanning
+                    logger.LogInformation($"  Switched back to HOURLY scanning (step size: {stepSize} minutes)");
+                }
+            }
+
+            // Filter: only BUY signals with IsSignal = true AND no active trade
+            if (result.IsSignal && result.Prediction == 1 && activeTrade == null)
             {
                 buySignalCount++;
 
                 var windowResult = new SlidingWindowResult
                 {
                     WindowIndex = windowCount - 1,
+                    EntryCandelIndex = i + windowSizeMinutes,
                     EntryTime = windowEndTime,
                     EntryPrice = result.EntryPrice,
                     StopLoss = result.StopLoss,
@@ -222,6 +245,14 @@ class Program
 
                 results.Add(windowResult);
 
+                // Set as active trade if it's still pending
+                if (windowResult.Outcome == "Pending")
+                {
+                    activeTrade = windowResult;
+                    stepSize = STEP_SIZE_MINUTE; // Switch to minute-by-minute scanning
+                    logger.LogInformation($"  Trade #{buySignalCount} opened - Switched to MINUTE scanning (step size: {stepSize} minute)");
+                }
+
                 // Print found signal
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine($"✓ BUY Signal #{buySignalCount} at {windowEndTime:yyyy-MM-dd HH:mm:ss} (Window {windowCount})");
@@ -239,6 +270,20 @@ class Program
                     Console.WriteLine($"  Outcome: {windowResult.Outcome} | P&L: {windowResult.ProfitLoss?.ToString("0.#####", CultureInfo.InvariantCulture) ?? "N/A"}");
                     Console.ResetColor();
                 }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"  Status: ACTIVE TRADE - awaiting TP/SL");
+                    Console.ResetColor();
+                }
+                Console.WriteLine();
+            }
+            else if (result.IsSignal && result.Prediction == 1 && activeTrade != null)
+            {
+                // Signal received but active trade is in progress
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"⊗ BUY Signal at {candles[i + windowSizeMinutes - 1].Timestamp:yyyy-MM-dd HH:mm:ss} SKIPPED - active trade in progress");
+                Console.ResetColor();
                 Console.WriteLine();
             }
         }
@@ -273,6 +318,80 @@ class Program
         return results;
     }
 
+    static void EvaluateActiveTrade(SlidingWindowResult activeTrade, List<Candle> allCandles, int currentWindowEndIndex)
+    {
+        // Evaluate trade from its actual entry point forward
+        // This checks if TP/SL is hit anytime after entry
+        if (!activeTrade.EntryPrice.HasValue || !activeTrade.StopLoss.HasValue || !activeTrade.TakeProfit.HasValue)
+            return;
+
+        const int M5_TO_M1 = 5;
+        const int MIN_HOLD_M5_CANDLES = 2;     // must match ML target creation
+        const int MAX_HORIZON_M5_CANDLES = 60; // must match ML target creation
+
+        var entryIdx = activeTrade.EntryCandelIndex;
+        if (entryIdx >= allCandles.Count)
+            return;
+
+        // Only evaluate using candles that are available up to the current window end,
+        // and never beyond the configured max horizon.
+        var horizonEndIdx = Math.Min(entryIdx + (MAX_HORIZON_M5_CANDLES * M5_TO_M1), allCandles.Count - 1);
+        var evalEndIdx = Math.Min(Math.Max(currentWindowEndIndex, entryIdx), horizonEndIdx);
+        var minHoldEndIdx = Math.Min(entryIdx + (MIN_HOLD_M5_CANDLES * M5_TO_M1), evalEndIdx);
+
+        // If min-hold window not yet elapsed, keep trade pending.
+        if (evalEndIdx < minHoldEndIdx)
+            return;
+
+        var sl = activeTrade.StopLoss.Value;
+        var tp = activeTrade.TakeProfit.Value;
+        var entryPrice = activeTrade.EntryPrice.Value;
+
+        // Check candles from min-hold end up to evaluation end.
+        for (int i = minHoldEndIdx; i <= evalEndIdx; i++)
+        {
+            var candle = allCandles[i];
+
+            // Check if take profit was hit
+            if (candle.High >= tp)
+            {
+                activeTrade.Outcome = "Win";
+                activeTrade.ExitPrice = tp;
+                activeTrade.ExitTime = candle.Timestamp;
+                activeTrade.ProfitLoss = tp - entryPrice;
+                return;
+            }
+
+            // Check if stop loss was hit
+            if (candle.Low <= sl)
+            {
+                activeTrade.Outcome = "Loss";
+                activeTrade.ExitPrice = sl;
+                activeTrade.ExitTime = candle.Timestamp;
+                activeTrade.ProfitLoss = sl - entryPrice;
+                return;
+            }
+        }
+
+        // If neither TP nor SL hit yet:
+        // - If max horizon reached, close the trade at horizon end.
+        // - Otherwise keep it pending and mark-to-market at current close.
+        if (currentWindowEndIndex >= horizonEndIdx)
+        {
+            var horizonCandle = allCandles[horizonEndIdx];
+            activeTrade.Outcome = "Timeout";
+            activeTrade.ExitTime = horizonCandle.Timestamp;
+            activeTrade.ExitPrice = horizonCandle.Close;
+            activeTrade.ProfitLoss = horizonCandle.Close - entryPrice;
+            return;
+        }
+
+        var markCandle = allCandles[evalEndIdx];
+        activeTrade.ExitTime = markCandle.Timestamp;
+        activeTrade.ExitPrice = markCandle.Close;
+        activeTrade.ProfitLoss = markCandle.Close - entryPrice;
+    }
+
     static void EvaluateTradeOutcome(SlidingWindowResult signal, List<Candle> allCandles, int windowEndIndex)
     {
         // Validate inputs
@@ -287,15 +406,36 @@ class Program
         var entryCandle = allCandles[entryIdx];
         signal.EntryTime = entryCandle.Timestamp;
         signal.EntryPrice = entryCandle.Open;
+
+        // If ATR is missing we cannot grade the trade deterministically.
+        var atr = signal.AtrM5;
+        if (!atr.HasValue || atr.Value <= 0)
+        {
+            signal.Outcome = "InvalidATR";
+            signal.ProfitLoss = null;
+            return;
+        }
+
         // SL/TP wyliczane względem nowego EntryPrice, ale ATR i multiplikatory z sygnału
-        var atr = signal.AtrM5 ?? 0.0;
         var slMult = signal.SlAtrMultiplier ?? 1.0;
         var tpMult = signal.TpAtrMultiplier ?? 2.0;
-        signal.StopLoss = signal.EntryPrice - atr * slMult;
-        signal.TakeProfit = signal.EntryPrice + atr * tpMult;
+        signal.StopLoss = signal.EntryPrice - atr.Value * slMult;
+        signal.TakeProfit = signal.EntryPrice + atr.Value * tpMult;
 
-        // Look at future candles after the entry (starting from entryIdx)
-        for (int i = entryIdx; i < Math.Min(entryIdx + 100, allCandles.Count); i++) // Look ahead up to 100 candles
+        const int M5_TO_M1 = 5;
+        const int MIN_HOLD_M5_CANDLES = 2;     // must match ML target creation
+        const int MAX_HORIZON_M5_CANDLES = 60; // must match ML target creation
+
+        // Look at future candles after the entry (starting from entryIdx) using the same horizon
+        // as the training target creation: 60 M5 candles = 300 minutes of M1 candles.
+        var maxHorizonMinutes = MAX_HORIZON_M5_CANDLES * M5_TO_M1;
+        var minHoldMinutes = MIN_HOLD_M5_CANDLES * M5_TO_M1;
+        var lookaheadLimit = Math.Min(entryIdx + maxHorizonMinutes, allCandles.Count);
+
+        // Enforce min-hold: ignore TP/SL hits before min-hold window elapses (matches ML labels).
+        var startEvalIdx = Math.Min(entryIdx + minHoldMinutes, lookaheadLimit);
+
+        for (int i = startEvalIdx; i < lookaheadLimit; i++)
         {
             var candle = allCandles[i];
             var sl = signal.StopLoss.Value;
@@ -323,14 +463,15 @@ class Program
             }
         }
 
-        // If neither TP nor SL hit in the lookahead window, check current price
+        // If neither TP nor SL hit within horizon, close at horizon end.
         if (entryIdx < allCandles.Count)
         {
-            var lastCandle = allCandles[Math.Min(entryIdx + 99, allCandles.Count - 1)];
+            var lastIdx = Math.Min(Math.Max(entryIdx, lookaheadLimit - 1), allCandles.Count - 1);
+            var lastCandle = allCandles[lastIdx];
             signal.ExitTime = lastCandle.Timestamp;
             signal.ExitPrice = lastCandle.Close;
             signal.ProfitLoss = lastCandle.Close - signal.EntryPrice.Value;
-            signal.Outcome = "Pending";
+            signal.Outcome = "Timeout";
         }
     }
 
@@ -726,6 +867,7 @@ class ArgumentParser
 class SlidingWindowResult
 {
     public int WindowIndex { get; set; }
+    public int EntryCandelIndex { get; set; } // Index of the candle where trade was opened
     public DateTime EntryTime { get; set; }
     public double? EntryPrice { get; set; }
     public double? StopLoss { get; set; }

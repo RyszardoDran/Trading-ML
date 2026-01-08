@@ -98,7 +98,7 @@ FEAT_ENABLE_VOLUME_M15: bool = True    # Analiza wolumenu M15 - znormalizowany w
 FEAT_ENABLE_OBV: bool = True           # On-Balance Volume (M5, M15, M60) - presja kupno/sprzedaż
 FEAT_ENABLE_MFI: bool = False           # Money Flow Index (M5, M15, M60) - RSI ważony ceną i volumem
 FEAT_ENABLE_M15_CONTEXT: bool = True   # Kontekst z interwału 15-minutowego (RSI, BB, SMA)
-FEAT_ENABLE_M60_CONTEXT: bool = True   # Kontekst z interwału 60-minutowego (RSI, BB)
+FEAT_ENABLE_M60_CONTEXT: bool = False  # ❌ DISABLED: M60 dominates (75% importance) → overfitting on stale indicators
 
 def risk_reward_ratio() -> float:
     return TP_ATR_MULTIPLIER / SL_ATR_MULTIPLIER

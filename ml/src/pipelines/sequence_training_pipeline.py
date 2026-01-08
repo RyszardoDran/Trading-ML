@@ -67,6 +67,7 @@ from ml.src.pipeline_stages import (
     train_and_evaluate_stage,
 )
 from ml.src.utils import PipelineConfig
+from ml.src.training.sequence_xgb_params import build_xgb_params
 
 
 logger = logging.getLogger(__name__)
@@ -240,6 +241,24 @@ def run_pipeline(params: PipelineParams) -> Dict[str, Any]:
         use_timeseries_cv=params.use_timeseries_cv,
         cv_folds=params.cv_folds,
     )
+
+    xgb_overrides = {
+        "learning_rate": params.xgb_learning_rate,
+        "max_depth": params.xgb_max_depth,
+        "min_child_weight": params.xgb_min_child_weight,
+        "subsample": params.xgb_subsample,
+        "colsample_bytree": params.xgb_colsample_bytree,
+        "colsample_bynode": params.xgb_colsample_bynode,
+        "reg_lambda": params.xgb_reg_lambda,
+        "reg_alpha": params.xgb_reg_alpha,
+        "gamma": params.xgb_gamma,
+        "n_estimators": params.xgb_n_estimators,
+        "max_delta_step": params.xgb_max_delta_step,
+    }
+    resolved_xgb_params = build_xgb_params(params.xgb_profile, xgb_overrides)
+    logger.info("Resolved XGBoost profile '%s'", params.xgb_profile)
+    for key in sorted(resolved_xgb_params):
+        logger.info("  %s = %s", key, resolved_xgb_params[key])
     
     if params.use_timeseries_cv:
         # ===== STAGE 6: Train and evaluate (CV mode) =====
@@ -286,6 +305,7 @@ def run_pipeline(params: PipelineParams) -> Dict[str, Any]:
                 use_cost_sensitive_learning=params.use_cost_sensitive_learning,
                 sample_weight_positive=params.sample_weight_positive,
                 sample_weight_negative=params.sample_weight_negative,
+                xgb_params=resolved_xgb_params,
             )
             
             # Store last fold's model for artifact saving
@@ -357,6 +377,7 @@ def run_pipeline(params: PipelineParams) -> Dict[str, Any]:
             use_cost_sensitive_learning=params.use_cost_sensitive_learning,
             sample_weight_positive=params.sample_weight_positive,
             sample_weight_negative=params.sample_weight_negative,
+            xgb_params=resolved_xgb_params,
         )
     
     # ===== STAGE 7: Save artifacts =====
@@ -448,6 +469,27 @@ if __name__ == "__main__":
     logger.info(f"  Trend filter: {'enabled' if params.enable_trend_filter else 'disabled'}")
     logger.info(f"  Pullback filter: {'enabled' if params.enable_pullback_filter else 'disabled'}")
     logger.info(f"  Random state: {params.random_state}")
+    logger.info(f"  XGBoost profile: {params.xgb_profile}")
+    cli_xgb_overrides = {
+        "learning_rate": params.xgb_learning_rate,
+        "max_depth": params.xgb_max_depth,
+        "min_child_weight": params.xgb_min_child_weight,
+        "subsample": params.xgb_subsample,
+        "colsample_bytree": params.xgb_colsample_bytree,
+        "colsample_bynode": params.xgb_colsample_bynode,
+        "reg_lambda": params.xgb_reg_lambda,
+        "reg_alpha": params.xgb_reg_alpha,
+        "gamma": params.xgb_gamma,
+        "n_estimators": params.xgb_n_estimators,
+        "max_delta_step": params.xgb_max_delta_step,
+    }
+    overrides_summary = ", ".join(
+        f"{key}={value}" for key, value in cli_xgb_overrides.items() if value is not None
+    )
+    if overrides_summary:
+        logger.info(f"  XGBoost overrides: {overrides_summary}")
+    else:
+        logger.info("  XGBoost overrides: none")
     logger.info("=" * 80 + "\n")
 
     try:

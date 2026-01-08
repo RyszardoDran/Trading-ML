@@ -5,7 +5,7 @@ XAU/USD trading model with class imbalance handling.
 """
 
 import logging
-from typing import Tuple
+from typing import Any, Dict, Optional
 
 import numpy as np
 from xgboost import XGBClassifier
@@ -21,6 +21,7 @@ def train_xgb(
     random_state: int = 42,
     sample_weight: np.ndarray | None = None,
     n_estimators: int = 600,
+    xgb_params: Optional[Dict[str, Any]] = None,
 ) -> XGBClassifier:
     """Train XGBoost classifier with class imbalance and cost-sensitive learning.
 
@@ -55,25 +56,29 @@ def train_xgb(
     if sample_weight is not None:
         logger.info(f"[POINT 1] Cost-Sensitive Learning: using sample weights (mean={sample_weight.mean():.4f})")
 
-    base = XGBClassifier(
-        n_estimators=n_estimators,
-        max_depth=6,
-        learning_rate=0.03,
-        subsample=0.7,
-        colsample_bytree=0.6,
-        min_child_weight=1,
-        reg_lambda=1.0,
-        reg_alpha=0.1,
-        objective="binary:logistic",
-        eval_metric=None,  # Disable eval_metric for CV (no eval_set)
-        random_state=random_state,
-        n_jobs=4,
-        scale_pos_weight=scale_pos_weight,
-        tree_method="hist",
-        verbosity=0,
-        grow_policy="depthwise",
-        early_stopping_rounds=20 if X_val is not None else None,  # Enable early stopping if val set provided
-    )
+    resolved_params: Dict[str, Any] = {
+        "objective": "binary:logistic",
+        "eval_metric": "aucpr",
+        "random_state": random_state,
+        "n_jobs": 4,
+        "scale_pos_weight": scale_pos_weight,
+        "tree_method": "hist",
+        "verbosity": 0,
+        "grow_policy": "depthwise",
+        "early_stopping_rounds": 20 if X_val is not None else None,
+    }
+
+    profile_params = dict(xgb_params or {})
+    if "n_estimators" not in profile_params:
+        profile_params["n_estimators"] = n_estimators
+
+    resolved_params.update(profile_params)
+
+    logger.info("Final XGBoost parameters (including overrides):")
+    for key in sorted(resolved_params):
+        logger.info("  %s = %s", key, resolved_params[key])
+
+    base = XGBClassifier(**resolved_params)
 
     # Train with or without eval_set
     logger.info("Training XGBoost classifier...")

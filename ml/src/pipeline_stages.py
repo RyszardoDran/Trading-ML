@@ -25,7 +25,7 @@ Usage:
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union, List
+from typing import Any, Dict, Optional, Tuple, Union, List
 
 import numpy as np
 import pandas as pd
@@ -744,6 +744,7 @@ def train_and_evaluate_stage(
     use_cost_sensitive_learning: bool = True,
     sample_weight_positive: float = 3.0,
     sample_weight_negative: float = 1.0,
+    xgb_params: Optional[Dict[str, Any]] = None,
 ) -> tuple[dict[str, float], object]:
     """Train model with proper validation/test separation.
 
@@ -802,11 +803,17 @@ def train_and_evaluate_stage(
         ).astype(np.float32)
         logger.info(f"  Weight ratio (positive/negative): {sample_weight_positive / sample_weight_negative:.2f}x")
 
+    resolved_xgb_params = xgb_params or {}
+    logger.info("XGBoost profile parameters in use (%d entries):", len(resolved_xgb_params))
+    for key in sorted(resolved_xgb_params):
+        logger.info("  %s = %s", key, resolved_xgb_params[key])
+
     model = train_xgb(
         X_train_scaled, y_train,
         X_val_scaled, y_val,  # Use val for early stopping
         random_state=random_state,
-        sample_weight=sample_weight
+        sample_weight=sample_weight,
+        xgb_params=resolved_xgb_params,
     )
 
     logger.info("Model training complete")

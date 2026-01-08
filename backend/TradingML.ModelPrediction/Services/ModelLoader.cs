@@ -73,14 +73,28 @@ public class ModelLoader
             var totalFeatures = totalFeaturesProp.GetInt32();
 
             // Optional properties - log and provide sensible defaults when absent
+            // Recommended min candles: prefer explicit M5 value saved by ML pipeline.
+            // Fallbacks:
+            // - recommended_min_candles_m1 (convert to M5)
+            // - legacy recommended_min_candles (assumed to be M5)
             int recommendedMinCandles = 0;
-            if (root.TryGetProperty("recommended_min_candles", out var recommendedProp) && recommendedProp.ValueKind != JsonValueKind.Null)
+            if (root.TryGetProperty("recommended_min_candles_m5", out var recommendedM5Prop) && recommendedM5Prop.ValueKind != JsonValueKind.Null)
+            {
+                recommendedMinCandles = recommendedM5Prop.GetInt32();
+            }
+            else if (root.TryGetProperty("recommended_min_candles_m1", out var recommendedM1Prop) && recommendedM1Prop.ValueKind != JsonValueKind.Null)
+            {
+                // 5 M1 candles = 1 M5 candle
+                var m1 = recommendedM1Prop.GetInt32();
+                recommendedMinCandles = m1 / 5;
+            }
+            else if (root.TryGetProperty("recommended_min_candles", out var recommendedProp) && recommendedProp.ValueKind != JsonValueKind.Null)
             {
                 recommendedMinCandles = recommendedProp.GetInt32();
             }
             else
             {
-                _logger.LogWarning("Optional property 'recommended_min_candles' not found in threshold JSON; defaulting to 0");
+                _logger.LogWarning("Optional property 'recommended_min_candles_m5' not found in threshold JSON; defaulting to 0");
             }
 
             double winRate = 0.0;

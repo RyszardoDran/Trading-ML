@@ -100,6 +100,16 @@ def aggregate_to_m5(
     
     # Drop incomplete bars (last bar may be incomplete)
     df_m5 = df_m5.dropna()
+
+    # Compute ATR on the aggregated M5 bars so SL/TP simulations can reuse
+    # exactly the same volatility numbers as the feature pipeline.
+    m5_high = df_m5["High"].astype(np.float32)
+    m5_low = df_m5["Low"].astype(np.float32)
+    m5_close = df_m5["Close"].astype(np.float32)
+    atr_m5_series = compute_atr(m5_high, m5_low, m5_close, period=14)
+    atr_m5_series = atr_m5_series.ffill().bfill().fillna(0.0)
+    df_m5["atr_m5"] = atr_m5_series
+    df_m5["ATR_M5"] = atr_m5_series
     
     logger.info(f"Aggregated to {len(df_m5)} M5 candles ({len(df_m1)/len(df_m5):.1f}x compression)")
     
@@ -173,6 +183,8 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     # ATR (14-period on M5 = 70 minutes)
     atr_14 = compute_atr(high, low, close, period=14)
     atr_norm = atr_14 / atr_14.rolling(14, min_periods=1).mean()
+    atr_14_filled = atr_14.ffill().bfill().fillna(0.0)
+    atr_norm_filled = atr_norm.ffill().bfill().fillna(1.0)
     
     # RSI (14-period on M5)
     rsi_14 = compute_rsi(close, period=14)
@@ -281,6 +293,7 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     
     # M15 indicators
     atr_m15 = compute_atr(high_m15, low_m15, close_m15, period=14)
+    atr_m15_norm = atr_m15 / atr_m15.rolling(14, min_periods=1).mean()
     rsi_m15 = compute_rsi(close_m15, period=14)
     bb_upper_m15, bb_sma_m15, bb_lower_m15 = compute_bollinger_bands(close_m15, period=20, num_std=2)
     bb_pos_m15 = (close_m15 - bb_lower_m15) / (bb_upper_m15 - bb_lower_m15 + 1e-9)
@@ -335,9 +348,9 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
     except Exception:
         dist_sma_20_m15 = pd.Series(0.0, index=df_m5.index)
     try:
-        dist_sma_200 = dist_sma_200_m15.reindex(df_m5.index, method='ffill').fillna(0)
+        dist_sma_200_m15_aligned = dist_sma_200_m15.reindex(df_m5.index, method='ffill').fillna(0)
     except Exception:
-        dist_sma_200 = pd.Series(0.0, index=df_m5.index)
+        dist_sma_200_m15_aligned = pd.Series(0.0, index=df_m5.index)
     try:
         volume_m15_norm = volume_m15_norm.reindex(df_m5.index, method='ffill').fillna(1.0)
     except Exception:
@@ -346,6 +359,14 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         cvd_m15_norm = cvd_m15_norm.reindex(df_m5.index, method='ffill').fillna(0)
     except Exception:
         cvd_m15_norm = pd.Series(0.0, index=df_m5.index)
+    try:
+        atr_m15_aligned = atr_m15.reindex(df_m5.index, method='ffill').fillna(0.0)
+    except Exception:
+        atr_m15_aligned = pd.Series(0.0, index=df_m5.index)
+    try:
+        atr_norm_m15_aligned = atr_m15_norm.reindex(df_m5.index, method='ffill').fillna(1.0)
+    except Exception:
+        atr_norm_m15_aligned = pd.Series(1.0, index=df_m5.index)
     
     # ========== M60 Context (from M5) ==========
     logger.info("Computing M60 context from M5...")
@@ -433,12 +454,24 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         features_dict["macd_hist_m5"] = pd.Series(0.0, index=df_m5.index)
         
     if FEAT_ENABLE_ATR:
-        features_dict["atr_norm_m5"] = atr_norm.fillna(1.0)
-        # Also expose raw ATR (absolute units) required by regime filters and target logic
-        features_dict["atr_m5"] = atr_14.fillna(0.0)
+        # Keep classifier inputs aligned with runtime ATR by defaulting to native M5 metrics.
+        native_atr = atr_14_filled.reindex(df_m5.index, fill_value=0.0)
+        native_atr_norm = atr_norm_filled.reindex(df_m5.index, fill_value=1.0)
+        features_dict["atr_norm_m5"] = native_atr_norm
+        features_dict["atr_m5"] = native_atr
+        # Preserve legacy column names for backwards compatibility (duplicates of native ATR).
+        features_dict["atr_norm_m5_native"] = native_atr_norm
+        features_dict["atr_m5_native"] = native_atr
+        # Expose the smoother M15 ATR series under new columns so research can still access it explicitly.
+        features_dict["atr_norm_m5_smooth"] = atr_norm_m15_aligned
+        features_dict["atr_m5_smooth"] = atr_m15_aligned
     else:
         features_dict["atr_norm_m5"] = pd.Series(1.0, index=df_m5.index)
         features_dict["atr_m5"] = pd.Series(0.0, index=df_m5.index)
+        features_dict["atr_norm_m5_native"] = pd.Series(1.0, index=df_m5.index)
+        features_dict["atr_m5_native"] = pd.Series(0.0, index=df_m5.index)
+        features_dict["atr_norm_m5_smooth"] = pd.Series(1.0, index=df_m5.index)
+        features_dict["atr_m5_smooth"] = pd.Series(0.0, index=df_m5.index)
     
     if FEAT_ENABLE_ADX:
         features_dict["adx"] = adx.fillna(20)
@@ -446,7 +479,7 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         features_dict["adx"] = pd.Series(20.0, index=df_m5.index)
 
     # Provide raw SMA200 level as well (regime filter expects 'sma_200')
-    features_dict["sma_200"] = sma_200.ffill().fillna(sma_200.mean() if not sma_200.empty else 0.0)
+    features_dict["sma_200"] = sma_200_m15.reindex(df_m5.index, method='ffill').fillna(sma_200_m15.mean() if not sma_200_m15.empty else 0.0)
 
     if ENABLE_CVD_INDICATOR:
         features_dict["cvd_m5"] = cvd_norm.fillna(0)
@@ -454,12 +487,11 @@ def engineer_m5_candle_features(df_m1: pd.DataFrame) -> pd.DataFrame:
         features_dict["cvd_m5"] = pd.Series(0.0, index=df_m5.index)
         
     if FEAT_ENABLE_SMA200:
-        # Keep original M5 SMA200 distance for backwards compatibility
         features_dict["dist_sma_200_m5"] = dist_sma_200_m5.fillna(0)
-        # Add M15 SMA200 distance as a separate feature for model to learn longer-term trend
-        features_dict["dist_sma_200_m15"] = dist_sma_200_m15.reindex(df_m5.index, method='ffill').fillna(0)
-        # Preserve legacy 'dist_sma_200' name as the M5 version (used by filters by default)
-        features_dict["dist_sma_200"] = dist_sma_200_m5.fillna(0)
+        features_dict["dist_sma_200_m15"] = dist_sma_200_m15_aligned
+        # Expose the smoother M15 distance via the legacy column name so downstream
+        # trend filters automatically benefit without any additional wiring.
+        features_dict["dist_sma_200"] = dist_sma_200_m15_aligned
     else:
         features_dict["dist_sma_200_m5"] = pd.Series(0.0, index=df_m5.index)
         features_dict["dist_sma_200_m15"] = pd.Series(0.0, index=df_m5.index)

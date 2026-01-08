@@ -14,6 +14,7 @@ import argparse
 from typing import Optional
 
 # Import canonical parameters from risk_config
+from .training.sequence_xgb_params import DEFAULT_XGB_PROFILE, available_profiles
 from .utils.risk_config import (
     ENABLE_M5_ALIGNMENT,
     ENABLE_PULLBACK_FILTER,
@@ -240,6 +241,81 @@ def parse_cli_arguments() -> argparse.Namespace:
         help=f"Weight for negative class samples (baseline, default: {SAMPLE_WEIGHT_NEGATIVE})",
     )
     
+    # ===== XGBoost hyperparameters =====
+    parser.add_argument(
+        "--xgb-profile",
+        type=str,
+        choices=tuple(available_profiles()),
+        default=DEFAULT_XGB_PROFILE,
+        help="Named XGBoost profile. 'regularized' is tuned to reduce overfitting (default).",
+    )
+    parser.add_argument(
+        "--xgb-learning-rate",
+        type=float,
+        default=None,
+        help="Override the learning rate (eta). Defaults come from the chosen profile.",
+    )
+    parser.add_argument(
+        "--xgb-max-depth",
+        type=int,
+        default=None,
+        help="Override tree depth. Lower values generalize better.",
+    )
+    parser.add_argument(
+        "--xgb-min-child-weight",
+        type=float,
+        default=None,
+        help="Override min_child_weight. Higher values penalize overly specific leaves.",
+    )
+    parser.add_argument(
+        "--xgb-subsample",
+        type=float,
+        default=None,
+        help="Override subsample ratio for rows (0-1].",
+    )
+    parser.add_argument(
+        "--xgb-colsample-bytree",
+        type=float,
+        default=None,
+        help="Override feature subsampling per tree (0-1].",
+    )
+    parser.add_argument(
+        "--xgb-colsample-bynode",
+        type=float,
+        default=None,
+        help="Override feature subsampling per split (0-1].",
+    )
+    parser.add_argument(
+        "--xgb-reg-lambda",
+        type=float,
+        default=None,
+        help="Override L2 regularization term (lambda).",
+    )
+    parser.add_argument(
+        "--xgb-reg-alpha",
+        type=float,
+        default=None,
+        help="Override L1 regularization term (alpha).",
+    )
+    parser.add_argument(
+        "--xgb-gamma",
+        type=float,
+        default=None,
+        help="Override gamma (minimum loss reduction for a split).",
+    )
+    parser.add_argument(
+        "--xgb-n-estimators",
+        type=int,
+        default=None,
+        help="Override number of boosting rounds (trees).",
+    )
+    parser.add_argument(
+        "--xgb-max-delta-step",
+        type=float,
+        default=None,
+        help="Override max_delta_step to stabilize updates on imbalanced data.",
+    )
+
     # ===== Feature engineering version =====
     parser.add_argument(
         "--feature-version",
