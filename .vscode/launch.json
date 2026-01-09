@@ -9,10 +9,12 @@
       "program": "${workspaceFolder}/backend/TradingML.ModelPrediction/bin/Debug/net10.0/TradingML.ModelPrediction.dll",
       "args": [
         "--candles-file",
-        "${workspaceFolder}/backend/TradingML.ModelPrediction/Data/XAU_1m_data_2025.csv",
+        "${workspaceFolder}/backend/TradingML.ModelPrediction/Data/XAU_1m_data_2026.csv",
         "--output",
         "${workspaceFolder}/backend/outputs/prediction_2025.json",
-        "--skip-regime"
+        "--skip-regime",
+        "--min-prod-threshold",
+        "0.7"
       ],
       "cwd": "${workspaceFolder}/backend/TradingML.ModelPrediction",
       "console": "integratedTerminal",

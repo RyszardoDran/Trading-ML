@@ -97,7 +97,8 @@ class Program
                 pythonPath,
                 metadata,
                 new ConsoleLogger<PredictionService>(),
-                options.SkipRegime // pass through CLI flag
+                options.SkipRegime, // pass through CLI flag
+                minProdThreshold: options.MinProdThreshold // pass the minimum production threshold
             );
 
             logger.LogInformation("\n" + new string('=', 80));
@@ -801,6 +802,8 @@ class ArgumentParser
         public int SampleCandleCount { get; set; }
         // New: allow passing --skip-regime to instruct Python to bypass regime filters
         public bool SkipRegime { get; set; }
+        // Optional: force a stricter production threshold (0..1) via MIN_PROD_THRESHOLD
+        public double? MinProdThreshold { get; set; }
     }
 
     public Options Parse(string[] args)
@@ -829,6 +832,20 @@ class ArgumentParser
 
                 case "--python":
                     options.PythonPath = i + 1 < args.Length ? args[++i] : null;
+                    break;
+
+                case "--min-prod-threshold":
+                    if (i + 1 < args.Length)
+                    {
+                        var raw = args[++i];
+                        // Accept both 0.70 and 0,70 for convenience.
+                        raw = raw.Replace(',', '.');
+                        if (double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var t))
+                        {
+                            if (t > 0.0 && t < 1.0)
+                                options.MinProdThreshold = t;
+                        }
+                    }
                     break;
 
                 case "--skip-regime":
@@ -863,6 +880,7 @@ class ArgumentParser
         Console.WriteLine("  --output <path>         Save results to JSON file (optional)");
         Console.WriteLine("  --python <path>         Python executable path (default: python)");
         Console.WriteLine("  --skip-regime            Skip ML regime filters when calling Python (sets SKIP_REGIME_FILTER=1)");
+        Console.WriteLine("  --min-prod-threshold <t> Force minimum decision threshold (0<t<1). Passed to Python as MIN_PROD_THRESHOLD.");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  # Use sample candles");
@@ -870,6 +888,9 @@ class ArgumentParser
         Console.WriteLine();
         Console.WriteLine("  # Use CSV file");
         Console.WriteLine("  ModelPrediction.exe --candles-file data.csv --output result.json");
+        Console.WriteLine();
+        Console.WriteLine("  # Raise win-rate by taking only high-confidence signals");
+        Console.WriteLine("  ModelPrediction.exe --candles-file data.csv --min-prod-threshold 0.70");
         Console.WriteLine();
         Console.WriteLine("CSV Format:");
         Console.WriteLine("  Timestamp,Open,High,Low,Close,Volume");

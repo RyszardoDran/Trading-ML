@@ -112,8 +112,9 @@ def test_trend_filter_blocks(monkeypatch, artifacts_template):
         columns=artifacts_template['feature_columns'],
         index=m5_df.index,
     )
-    # make dist_sma_200 <= 0 to trigger trend filter
-    features_df['dist_sma_200'] = -0.1
+    # make dist_sma_200 <= TREND_MIN_DIST_SMA200 to trigger trend filter
+    # (default is relaxed to -0.5 in risk_config)
+    features_df['dist_sma_200'] = -0.6
     features_df['adx'] = 30.0
     features_df['rsi_m5'] = 50.0
 

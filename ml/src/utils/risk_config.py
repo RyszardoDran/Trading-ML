@@ -41,12 +41,15 @@ WINDOW_SIZE: int = 80                # Skrócony window by szybciej wykrywać se
 
 # ===== Trading Filters =====
 ENABLE_M5_ALIGNMENT: bool = False      # M5 candle close alignment
-ENABLE_TREND_FILTER: bool = True       # Price above SMA200 and ADX threshold
+ENABLE_TREND_FILTER: bool = False      # Disabled: was choking live signals; rely on model + regime filter
 ENABLE_PULLBACK_FILTER: bool = False   # RSI_M5 pullback guard
 
 # ===== Trend Filter Parameters (when enabled) =====
-TREND_MIN_DIST_SMA200: float = 0
-TREND_MIN_ADX: float = 15.0
+# dist_sma_200 is normalized by ATR (see engineer_m5.py), so -0.5 means
+# allow up to ~0.5 ATR below SMA200 to avoid choking signals in mild pullbacks.
+TREND_MIN_DIST_SMA200: float = -0.5
+# Relaxed to increase signal frequency (still filters very low-trend regimes)
+TREND_MIN_ADX: float = 8.0
 
 # ===== Pullback Filter Parameters (when enabled) =====
 PULLBACK_MAX_RSI_M5: float = 75.0

@@ -1,0 +1,19 @@
+
+============================================================
+TRAINING COMPLETE - SEQUENCE PIPELINE
+============================================================
+Window Size:       80 candles
+Threshold:         0.50
+WIN RATE:          0.3437 (34.37%)
+Precision:         0.3437
+Recall:            0.9952
+F1 Score:          0.5109
+ROC-AUC:           0.6529
+PR-AUC:            0.4935
+============================================================
+
+Win rate is the precision: when model predicts 'BUY',
+it will be correct 34.37% of the time on test data.
+
+Log file saved to: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\logs\sequence_xgb_train_years_2023_2024_2025_20260108_113656.log
+============================================================

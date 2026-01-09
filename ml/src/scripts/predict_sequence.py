@@ -75,7 +75,17 @@ sys.path.insert(0, str(ml_dir))
 from src.features.engineer_m5 import aggregate_to_m5, engineer_m5_candle_features
 from src.features.indicators import compute_atr
 from src.filters.regime_filter import should_trade
-from src.utils.risk_config import ATR_PERIOD_M5, SL_ATR_MULTIPLIER, TP_ATR_MULTIPLIER, risk_reward_ratio
+from src.utils.risk_config import (
+    ATR_PERIOD_M5,
+    ENABLE_PULLBACK_FILTER,
+    ENABLE_TREND_FILTER,
+    PULLBACK_MAX_RSI_M5,
+    SL_ATR_MULTIPLIER,
+    TP_ATR_MULTIPLIER,
+    TREND_MIN_ADX,
+    TREND_MIN_DIST_SMA200,
+    risk_reward_ratio,
+)
 
 # Suppress sklearn version warnings
 import warnings
@@ -361,18 +371,27 @@ def predict(
         "rr": float(rr),
     }
 
-    # --- TREND FILTER CHECK ---
-    # Check if the latest candle is in an uptrend (Close > SMA200) AND ADX > 15 AND RSI_M5 < 75
-    skip_regime_env = os.getenv("SKIP_REGIME_FILTER") is not None and os.getenv("SKIP_REGIME_FILTER").strip().lower() in ("1","true","yes","y")
+    # --- TREND/PULLBACK FILTER CHECK ---
+    # These should match training-time sequence filters (risk_config.py) to avoid
+    # training/inference mismatch. They can still be bypassed for diagnostics via
+    # SKIP_REGIME_FILTER (legacy name, used by backend --skip-regime).
+    skip_regime_env = (
+        os.getenv("SKIP_REGIME_FILTER") is not None
+        and os.getenv("SKIP_REGIME_FILTER").strip().lower() in ("1", "true", "yes", "y")
+    )
     if skip_regime_env:
         logger.info("Skipping trend/pullback filters because SKIP_REGIME_FILTER is set")
     else:
-        if "dist_sma_200" in features.columns and "adx" in features.columns:
-            last_dist = features["dist_sma_200"].iloc[-1]
-            last_adx = features["adx"].iloc[-1]
-            
-            if last_dist <= 0:
-                logger.debug(f"Trend Filter: dist_sma_200={last_dist:.4f} (filtered)")
+        if ENABLE_TREND_FILTER and "dist_sma_200" in features.columns and "adx" in features.columns:
+            last_dist = float(features["dist_sma_200"].iloc[-1])
+            last_adx = float(features["adx"].iloc[-1])
+
+            if TREND_MIN_DIST_SMA200 is not None and last_dist <= TREND_MIN_DIST_SMA200:
+                logger.debug(
+                    "Trend Filter: dist_sma_200=%.4f (min=%.4f) (filtered)",
+                    last_dist,
+                    float(TREND_MIN_DIST_SMA200),
+                )
                 return {
                     **common_result,
                     "probability": 0.0,
@@ -382,8 +401,12 @@ def predict(
                     "sl": None,
                     "tp": None,
                 }
-            if last_adx <= 15:
-                logger.debug(f"Trend Filter: ADX={last_adx:.2f} (filtered)")
+            if TREND_MIN_ADX is not None and last_adx <= TREND_MIN_ADX:
+                logger.debug(
+                    "Trend Filter: ADX=%.2f (min=%.2f) (filtered)",
+                    last_adx,
+                    float(TREND_MIN_ADX),
+                )
                 return {
                     **common_result,
                     "probability": 0.0,
@@ -393,11 +416,15 @@ def predict(
                     "sl": None,
                     "tp": None,
                 }
-                
-        if "rsi_m5" in features.columns:
-            last_rsi = features["rsi_m5"].iloc[-1]
-            if last_rsi >= 75:
-                logger.debug(f"Pullback Filter: RSI_M5={last_rsi:.2f} (filtered)")
+
+        if ENABLE_PULLBACK_FILTER and "rsi_m5" in features.columns:
+            last_rsi = float(features["rsi_m5"].iloc[-1])
+            if PULLBACK_MAX_RSI_M5 is not None and last_rsi >= PULLBACK_MAX_RSI_M5:
+                logger.debug(
+                    "Pullback Filter: RSI_M5=%.2f (max=%.2f) (filtered)",
+                    last_rsi,
+                    float(PULLBACK_MAX_RSI_M5),
+                )
                 return {
                     **common_result,
                     "probability": 0.0,

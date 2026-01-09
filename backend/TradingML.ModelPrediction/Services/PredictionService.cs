@@ -19,19 +19,22 @@ public class PredictionService
     private readonly ModelMetadata _metadata;
     private readonly ILogger<PredictionService> _logger;
     private readonly bool _skipRegime; // when true, pass --skip-regime to python and set SKIP_REGIME_FILTER env var
+    private readonly double? _minProdThreshold; // when set, pass MIN_PROD_THRESHOLD to python to enforce stricter signals
 
     public PredictionService(
         string modelsDirectory,
         string pythonPath,
         ModelMetadata metadata,
         ILogger<PredictionService> logger,
-        bool skipRegime = false)
+        bool skipRegime = false,
+        double? minProdThreshold = null)
     {
         _modelsDirectory = modelsDirectory ?? throw new ArgumentNullException(nameof(modelsDirectory));
         _pythonPath = pythonPath ?? throw new ArgumentNullException(nameof(pythonPath));
         _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _skipRegime = skipRegime;
+        _minProdThreshold = minProdThreshold;
     }
 
     /// <summary>
@@ -210,6 +213,16 @@ public class PredictionService
             if (_skipRegime)
             {
                 process.StartInfo.Environment["SKIP_REGIME_FILTER"] = "1";
+            }
+
+            // Optional: enforce a stricter decision threshold in Python
+            if (_minProdThreshold.HasValue)
+            {
+                var t = _minProdThreshold.Value;
+                if (t > 0.0 && t < 1.0)
+                {
+                    process.StartInfo.Environment["MIN_PROD_THRESHOLD"] = t.ToString("0.####", CultureInfo.InvariantCulture);
+                }
             }
 
             process.Start();

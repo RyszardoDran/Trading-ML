@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Convert XAU 1m CSV files (2025) to the same format as the 2024 files.
+"""Generic CSV format converter utility.
 
-Output format:
+This small utility normalizes CSV files into a consistent OHLCV format
+and delimiter suitable for downstream pipelines. It is tolerant of
+common input delimiters and several date/time formats.
+
+Default output format (can be customized by editing the script):
 - delimiter: semicolon
 - header: Date;Open;High;Low;Close;Volume
 - Date format: YYYY.MM.DD HH:MM (no seconds)
-
-The script tolerates common input delimiters and several date formats.
 """
 from __future__ import annotations
 import argparse
-import csv
 import sys
 from pathlib import Path
 from typing import Optional
@@ -22,7 +23,6 @@ PREFERRED_COLUMNS = ["Date", "Open", "High", "Low", "Close", "Volume"]
 
 
 def detect_delimiter(sample: str) -> str:
-    # try common delimiters
     for d in [';', ',', '\t', '|']:
         if d in sample:
             return d
@@ -30,23 +30,45 @@ def detect_delimiter(sample: str) -> str:
 
 
 def read_csv_flexible(path: Path) -> pd.DataFrame:
-    # read a small sample to detect delimiter
     text = path.read_text(encoding='utf-8', errors='ignore')
     first_line = text.splitlines()[0] if text else ''
     delim = detect_delimiter(first_line)
-    # try reading and be forgiving with decimal commas
+    
+    # Try tab first (common format)
+    try:
+        df = pd.read_csv(path, sep='\t', engine='python')
+        if len(df.columns) > 1:
+            return df
+    except Exception:
+        pass
+    
+    # Try whitespace
+    try:
+        df = pd.read_csv(path, sep=r'\s+', engine='python')
+        if len(df.columns) > 1:
+            return df
+    except Exception:
+        pass
+    
+    # Try detected delimiter
     try:
         df = pd.read_csv(path, sep=delim, engine='python')
+        if len(df.columns) > 1:
+            return df
     except Exception:
-        # fallback: let pandas try to infer
-        df = pd.read_csv(path, engine='python')
-    return df
+        pass
+    
+    # Fallback
+    return pd.read_csv(path, engine='python')
 
 
 def normalize_column_names(cols: list[str]) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for c in cols:
         lc = c.strip().lower()
+        # Ignore columns with "not_" in name
+        if 'not_' in lc or 'irrelevant' in lc:
+            continue
         if 'date' in lc or 'time' in lc:
             mapping[c] = 'Date'
         elif lc in ('open', 'o'):
@@ -64,12 +86,11 @@ def normalize_column_names(cols: list[str]) -> dict[str, str]:
 
 def parse_dates_column(df: pd.DataFrame, col: str) -> pd.Series:
     s = df[col].astype(str).str.strip()
-    # replace common separators
-    # try multiple formats
     formats = [
-        '%Y.%m.%d %H:%M',
-        '%Y-%m-%d %H:%M:%S',
         '%Y-%m-%d %H:%M',
+        '%Y-%m-%d %H:%M:%S',
+        '%Y.%m.%d %H:%M',
+        '%Y.%m.%d %H:%M:%S',
         '%d.%m.%Y %H:%M',
         '%d/%m/%Y %H:%M',
         '%Y/%m/%d %H:%M',
@@ -80,7 +101,6 @@ def parse_dates_column(df: pd.DataFrame, col: str) -> pd.Series:
             return pd.to_datetime(s, format=fmt, errors='raise')
         except Exception:
             continue
-    # last resort: let pandas infer
     return pd.to_datetime(s, errors='coerce')
 
 
@@ -96,14 +116,32 @@ def convert(in_path: Path, out_path: Path, overwrite: bool = False) -> None:
         raise FileExistsError(f"Output exists: {out_path} (use --overwrite to replace)")
 
     df = read_csv_flexible(in_path)
+    cols_list = df.columns.tolist()
+    
+    # Check if this is a headerless space-delimited file (date in first col)
+    has_date_col = False
+    try:
+        pd.to_datetime(cols_list[0], format='%Y-%m-%d', errors='raise')
+        has_date_col = True
+    except:
+        pass
+    
+    if has_date_col and len(cols_list) >= 7:
+        # Merge first two columns as date+time
+        df['Date'] = df[cols_list[0]].astype(str) + ' ' + df[cols_list[1]].astype(str)
+        df['Open'] = df[cols_list[2]]
+        df['High'] = df[cols_list[3]]
+        df['Low'] = df[cols_list[4]]
+        df['Close'] = df[cols_list[5]]
+        df['Volume'] = df[cols_list[6]]
+    else:
+        # Normalize columns normally
+        col_map = normalize_column_names(list(df.columns))
+        df = df.rename(columns=col_map)
 
-    # normalize columns
-    col_map = normalize_column_names(list(df.columns))
-    df = df.rename(columns=col_map)
-
-    # If Date column not found try first column
-    if 'Date' not in df.columns:
-        df = df.rename(columns={df.columns[0]: 'Date'})
+        # If Date column not found try first column
+        if 'Date' not in df.columns:
+            df = df.rename(columns={df.columns[0]: 'Date'})
 
     # Ensure required columns exist (fill missing with NaN/0)
     for c in ['Open', 'High', 'Low', 'Close', 'Volume']:
@@ -132,17 +170,14 @@ def convert(in_path: Path, out_path: Path, overwrite: bool = False) -> None:
 
 
 def main(argv: Optional[list[str]] = None) -> None:
-    p = argparse.ArgumentParser(description='Convert XAU 1m CSV to 2024 format')
-    # Positional args kept for backward compatibility
-    p.add_argument('input', type=Path, nargs='?', help='Input CSV path (2025 raw data)')
-    p.add_argument('output', type=Path, nargs='?', help='Output CSV path', default=Path('ml/src/data/XAU_1m_data_2025_converted.csv'))
-    # New named parameters for universality
+    p = argparse.ArgumentParser(description='Generic CSV format converter')
+    p.add_argument('input', type=Path, nargs='?', help='Input CSV path')
+    p.add_argument('output', type=Path, nargs='?', help='Output CSV path', default=Path('ml/src/data/converted.csv'))
     p.add_argument('--source', '-s', type=Path, help='Source input CSV path (alternative to positional input)')
     p.add_argument('--dest', '-d', type=Path, help='Destination output CSV path (alternative to positional output)')
     p.add_argument('--overwrite', action='store_true', help='Overwrite output if exists')
     args = p.parse_args(argv)
 
-    # Resolve input/output paths: flags take precedence over positional args
     in_path: Optional[Path] = None
     out_path: Optional[Path] = None
 

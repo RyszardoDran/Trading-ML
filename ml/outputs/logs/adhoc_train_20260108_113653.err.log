@@ -1,0 +1,232 @@
+2026-01-08 11:36:56 - INFO - Pipeline configuration validated successfully
+2026-01-08 11:36:56 - INFO - 
+================================================================================
+2026-01-08 11:36:56 - INFO - SEQUENCE XGBoost TRAINING PIPELINE - XAU/USD 1-Minute Data
+2026-01-08 11:36:56 - INFO - ================================================================================
+2026-01-08 11:36:56 - INFO - Log file: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\logs\sequence_xgb_train_years_2023_2024_2025_20260108_113656.log
+2026-01-08 11:36:56 - INFO - Start time: 2026-01-08 11:36:56
+2026-01-08 11:36:56 - INFO - Data years: [2023, 2024, 2025]
+2026-01-08 11:36:56 - INFO - 
+Pipeline Configuration:
+2026-01-08 11:36:56 - INFO -   Feature engineering version: v1
+2026-01-08 11:36:56 - INFO -   Window size: 80 candles
+2026-01-08 11:36:56 - INFO -   ATR SL multiplier: 1.0x (from risk_config.py)
+2026-01-08 11:36:56 - INFO -   ATR TP multiplier: 2.0x (from risk_config.py)
+2026-01-08 11:36:56 - INFO -   Min hold time: 2 M5 candles
+2026-01-08 11:36:56 - INFO -   Max horizon: 60 M5 candles
+2026-01-08 11:36:56 - INFO -   Trading session: london_ny
+2026-01-08 11:36:56 - INFO -   Threshold optimization: HYBRID (EV with precision AND recall floors)
+2026-01-08 11:36:56 - INFO -     - Min precision: 0.65
+2026-01-08 11:36:56 - INFO -     - Min recall: 0.3
+2026-01-08 11:36:56 - INFO -     - Win coefficient: 1.2
+2026-01-08 11:36:56 - INFO -     - Loss coefficient: -1.0
+2026-01-08 11:36:56 - INFO -   M5 alignment filter: disabled
+2026-01-08 11:36:56 - INFO -   Trend filter: enabled
+2026-01-08 11:36:56 - INFO -   Pullback filter: disabled
+2026-01-08 11:36:56 - INFO -   Random state: 42
+2026-01-08 11:36:56 - INFO -   XGBoost profile: regularized
+2026-01-08 11:36:56 - INFO -   XGBoost overrides: none
+2026-01-08 11:36:56 - INFO - ================================================================================
+
+2026-01-08 11:36:56 - INFO - Loading data from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2026-01-08 11:36:56 - INFO - Year filter applied: loading only [2023, 2024, 2025]
+2026-01-08 11:36:57 - INFO - Loaded 789,390 rows from C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\src\data
+2026-01-08 11:36:57 - INFO - Date range: 2023-01-03 01:01:00 to 2025-11-28 19:43:00
+2026-01-08 11:36:57 - WARNING - window_size parameter is deprecated and ignored (passed: 80)
+2026-01-08 11:36:57 - WARNING - feature_version parameter is deprecated and ignored (passed: v1)
+2026-01-08 11:36:57 - INFO - Aggregating M1 data to M5 timeframe...
+2026-01-08 11:36:57 - INFO - Aggregating 789390 M1 candles to M5...
+2026-01-08 11:36:58 - INFO - Aggregated to 158076 M5 candles (5.0x compression)
+2026-01-08 11:36:58 - INFO - Aggregated 789,390 M1 candles \u2192 158,076 M5 candles (20.0% compression)
+2026-01-08 11:36:58 - INFO - Engineering technical features on M5 timeframe (with M15/M60 context)...
+2026-01-08 11:36:58 - INFO - Engineering M5 features...
+2026-01-08 11:36:58 - INFO - Aggregating 158076 M1 candles to M5...
+2026-01-08 11:36:58 - INFO - Aggregated to 158076 M5 candles (1.0x compression)
+2026-01-08 11:36:58 - INFO - Computing M5 primary features...
+2026-01-08 11:37:00 - INFO - Computing M15 context from M5...
+2026-01-08 11:37:00 - INFO - Computing M60 context from M5...
+2026-01-08 11:37:00 - INFO - M5 feature engineering complete: 158073 rows × 36 features
+2026-01-08 11:37:00 - INFO - Timeframe: M5 (5-minute candles)
+2026-01-08 11:37:00 - INFO - Date range: 2023-01-03 01:15:00 to 2025-11-28 19:40:00
+2026-01-08 11:37:00 - INFO - Features shape: (158073, 36)
+2026-01-08 11:37:00 - INFO - Feature columns: 36
+2026-01-08 11:37:00 - INFO - Creating targets on M5 timeframe (SL=1.0×ATR, TP=2.0×ATR, min_hold=2 M5 candles, max_horizon=60 M5 candles)
+2026-01-08 11:37:00 - INFO - Creating targets (SL/TP simulation) for 158,073 candles...
+2026-01-08 11:37:00 - INFO - Parameters: SL=1.0×ATR, TP=2.0×ATR, min_hold=2min, max_horizon=60min
+2026-01-08 11:37:00 - INFO - Using pre-calculated M5 ATR (atr_m5) for SL/TP targets
+2026-01-08 11:37:00 - INFO - Target creation complete: 158,013 valid targets
+2026-01-08 11:37:00 - INFO - Targets shape: 158013
+2026-01-08 11:37:00 - INFO - Positive class (win): 55,188 (34.93%)
+2026-01-08 11:37:00 - INFO - Negative class (loss): 102,825 (65.07%)
+2026-01-08 11:37:00 - INFO - Creating sequences on M5 timeframe (window_size=80 M5 candles = 400 minutes)...
+2026-01-08 11:37:00 - INFO - Filter config: m5_alignment=False (already M5), trend=True, pullback=False, max_windows=80,000
+2026-01-08 11:37:00 - INFO - M5 alignment filter disabled; keeping all timestamps irrespective of minute alignment
+2026-01-08 11:37:00 - INFO - Applied Trend Filter (dist_sma_200 > 0.00, ADX > 15.00): kept 81898/157934 (51.9%)
+2026-01-08 11:37:00 - INFO - Pullback filter disabled; not constraining RSI_M5
+2026-01-08 11:37:00 - INFO - Session filter 'london_ny': keeping 50,012 / 157,934 windows (31.7%)
+2026-01-08 11:37:01 - INFO - Sequences created: X.shape=(50012, 2880), y.shape=(50012,)
+2026-01-08 11:37:01 - INFO - Positive class in sequences: 17,386 (34.76%)
+2026-01-08 11:37:01 - INFO - Using chronological 3-way split (train/val/test)...
+2026-01-08 11:37:01 - INFO - Using percentage split (70/15/15) for year_filter=[2023, 2024, 2025]
+2026-01-08 11:37:01 - INFO - Split sizes: train=35,008, val=7,502, test=7,502
+2026-01-08 11:37:01 - INFO - Class distribution validation:
+2026-01-08 11:37:01 - INFO -   TRAIN: pos=12,124 (34.6%), neg=22,884 (65.4%)
+2026-01-08 11:37:01 - INFO -   VAL: pos=2,753 (36.7%), neg=4,749 (63.3%)
+2026-01-08 11:37:01 - INFO -   TEST: pos=2,509 (33.4%), neg=4,993 (66.6%)
+2026-01-08 11:37:01 - INFO -   Max difference in positive class: 3.3% (tolerance: 10.0%)
+2026-01-08 11:37:01 - INFO -   \u2705 Class distributions are stable (max diff: 3.3% < 10.0%)
+2026-01-08 11:37:01 - WARNING - \u26a0\ufe0f  158 sequences cross temporal boundaries (potential data leakage)
+2026-01-08 11:37:01 - WARNING -    Removing 158 sequences to prevent data leakage
+2026-01-08 11:37:01 - INFO - Removing 158 boundary-crossing sequences...
+2026-01-08 11:37:01 - INFO - After removal: train=34,897, val=7,478, test=7,479
+2026-01-08 11:37:01 - INFO - Scaling features with RobustScaler (robust to outliers)...
+2026-01-08 11:37:12 - INFO - Feature scaling complete: mean=0.0690, std=0.7296
+2026-01-08 11:37:12 - INFO - Resolved XGBoost profile 'regularized'
+2026-01-08 11:37:12 - INFO -   colsample_bynode = 0.8
+2026-01-08 11:37:12 - INFO -   colsample_bytree = 0.45
+2026-01-08 11:37:12 - INFO -   gamma = 1.0
+2026-01-08 11:37:12 - INFO -   learning_rate = 0.018
+2026-01-08 11:37:12 - INFO -   max_delta_step = 1.0
+2026-01-08 11:37:12 - INFO -   max_depth = 4
+2026-01-08 11:37:12 - INFO -   min_child_weight = 8.0
+2026-01-08 11:37:12 - INFO -   n_estimators = 850
+2026-01-08 11:37:12 - INFO -   reg_alpha = 1.2
+2026-01-08 11:37:12 - INFO -   reg_lambda = 2.5
+2026-01-08 11:37:12 - INFO -   subsample = 0.55
+2026-01-08 11:37:12 - INFO - Training XGBoost model...
+2026-01-08 11:37:12 - INFO - 
+[POINT 1 OPTIMIZATION] Applying cost-sensitive learning...
+2026-01-08 11:37:12 - INFO -   Sample weights: positive=2.0, negative=1.0
+2026-01-08 11:37:12 - INFO -   Weight ratio (positive/negative): 2.00x
+2026-01-08 11:37:12 - INFO - XGBoost profile parameters in use (11 entries):
+2026-01-08 11:37:12 - INFO -   colsample_bynode = 0.8
+2026-01-08 11:37:12 - INFO -   colsample_bytree = 0.45
+2026-01-08 11:37:12 - INFO -   gamma = 1.0
+2026-01-08 11:37:12 - INFO -   learning_rate = 0.018
+2026-01-08 11:37:12 - INFO -   max_delta_step = 1.0
+2026-01-08 11:37:12 - INFO -   max_depth = 4
+2026-01-08 11:37:12 - INFO -   min_child_weight = 8.0
+2026-01-08 11:37:12 - INFO -   n_estimators = 850
+2026-01-08 11:37:12 - INFO -   reg_alpha = 1.2
+2026-01-08 11:37:12 - INFO -   reg_lambda = 2.5
+2026-01-08 11:37:12 - INFO -   subsample = 0.55
+2026-01-08 11:37:12 - INFO - Class balance (train): pos=12,104, neg=22,793, imbalance_ratio=1.88
+2026-01-08 11:37:12 - INFO - Applied scale_pos_weight=1.8831 to handle class imbalance
+2026-01-08 11:37:12 - INFO - [POINT 1] Cost-Sensitive Learning: using sample weights (mean=1.3468)
+2026-01-08 11:37:12 - INFO - Final XGBoost parameters (including overrides):
+2026-01-08 11:37:12 - INFO -   colsample_bynode = 0.8
+2026-01-08 11:37:12 - INFO -   colsample_bytree = 0.45
+2026-01-08 11:37:12 - INFO -   early_stopping_rounds = 20
+2026-01-08 11:37:12 - INFO -   eval_metric = aucpr
+2026-01-08 11:37:12 - INFO -   gamma = 1.0
+2026-01-08 11:37:12 - INFO -   grow_policy = depthwise
+2026-01-08 11:37:12 - INFO -   learning_rate = 0.018
+2026-01-08 11:37:12 - INFO -   max_delta_step = 1.0
+2026-01-08 11:37:12 - INFO -   max_depth = 4
+2026-01-08 11:37:12 - INFO -   min_child_weight = 8.0
+2026-01-08 11:37:12 - INFO -   n_estimators = 850
+2026-01-08 11:37:12 - INFO -   n_jobs = 4
+2026-01-08 11:37:12 - INFO -   objective = binary:logistic
+2026-01-08 11:37:12 - INFO -   random_state = 42
+2026-01-08 11:37:12 - INFO -   reg_alpha = 1.2
+2026-01-08 11:37:12 - INFO -   reg_lambda = 2.5
+2026-01-08 11:37:12 - INFO -   scale_pos_weight = 1.8830964970257766
+2026-01-08 11:37:12 - INFO -   subsample = 0.55
+2026-01-08 11:37:12 - INFO -   tree_method = hist
+2026-01-08 11:37:12 - INFO -   verbosity = 0
+2026-01-08 11:37:12 - INFO - Training XGBoost classifier...
+2026-01-08 11:39:49 - INFO - Training completed
+2026-01-08 11:39:49 - INFO - Model training complete
+2026-01-08 11:39:49 - INFO - Optimizing decision threshold on VAL set...
+2026-01-08 11:39:49 - INFO - Running threshold optimization on VAL set...
+2026-01-08 11:39:54 - INFO - 
+Top 5 thresholds on VAL set:
+2026-01-08 11:39:54 - INFO -   T=0.00: Precision=0.3635, Recall=1.0000, F1=0.5332, Score=-inf
+2026-01-08 11:39:54 - INFO -   T=0.30: Precision=0.3635, Recall=1.0000, F1=0.5332, Score=-inf
+2026-01-08 11:39:54 - INFO -   T=0.42: Precision=0.3644, Recall=1.0000, F1=0.5341, Score=-inf
+2026-01-08 11:39:54 - INFO -   T=0.44: Precision=0.3652, Recall=0.9996, F1=0.5349, Score=-inf
+2026-01-08 11:39:54 - INFO -   T=0.46: Precision=0.3661, Recall=0.9996, F1=0.5360, Score=-inf
+2026-01-08 11:39:54 - INFO - Optimal threshold: 0.5000 (Score=-inf on VAL)
+2026-01-08 11:39:54 - INFO - Evaluating on TEST set with optimized threshold...
+2026-01-08 11:39:54 - INFO - Probability stats: min=0.3165, max=0.8518, mean=0.6374, std=0.0607
+2026-01-08 11:39:54 - INFO - Using fixed threshold: 0.5000
+2026-01-08 11:39:54 - INFO - Confusion matrix@thr=0.5000:
+2026-01-08 11:39:54 - INFO -   [[TN=204, FP=4767],
+2026-01-08 11:39:54 - INFO -    [FN=12, TP=2496]]
+2026-01-08 11:39:54 - INFO - 
+TEST SET EVALUATION:
+2026-01-08 11:39:54 - INFO -   Precision: 0.3437
+2026-01-08 11:39:54 - INFO -   Recall:    0.9952
+2026-01-08 11:39:54 - INFO -   F1:        0.5109
+2026-01-08 11:39:54 - INFO -   ROC-AUC:   0.6529
+2026-01-08 11:39:54 - INFO - Final TEST metrics: threshold=0.5000, win_rate=0.3437 (34.37%), precision=0.3437, recall=0.9952, f1=0.5109, roc_auc=0.6529, pr_auc=0.4935
+2026-01-08 11:39:54 - INFO - Saving artifacts...
+2026-01-08 11:39:54 - INFO - Saved model to sequence_xgb_model.pkl
+2026-01-08 11:39:54 - INFO - Saved scaler to sequence_scaler.pkl (required for inference)
+2026-01-08 11:39:54 - INFO - Saved feature columns to sequence_feature_columns.json
+2026-01-08 11:39:54 - INFO - Saved metadata to sequence_threshold.json (analysis_window=7 days)
+2026-01-08 11:39:54 - INFO - Analyzing feature importance...
+2026-01-08 11:39:54 - INFO - 
+Top 30 most important features:
+2026-01-08 11:39:54 - INFO -    1. t-5_dist_sma_200_m5                      = 0.002145
+2026-01-08 11:39:54 - INFO -    2. t-1_dist_sma_20_m15                      = 0.002109
+2026-01-08 11:39:54 - INFO -    3. t-8_rsi_m15                              = 0.002027
+2026-01-08 11:39:54 - INFO -    4. t-2_dist_sma_200_m5                      = 0.001914
+2026-01-08 11:39:54 - INFO -    5. t-2_cvd_m15                              = 0.001901
+2026-01-08 11:39:54 - INFO -    6. t-2_bb_pos_m15                           = 0.001880
+2026-01-08 11:39:54 - INFO -    7. t-2_dist_sma_20_m15                      = 0.001813
+2026-01-08 11:39:54 - INFO -    8. t-0_bb_pos_m15                           = 0.001799
+2026-01-08 11:39:54 - INFO -    9. t-33_dist_sma_200                        = 0.001763
+2026-01-08 11:39:54 - INFO -   10. t-6_bb_pos_m15                           = 0.001727
+2026-01-08 11:39:54 - INFO -   11. t-1_bb_pos_m15                           = 0.001717
+2026-01-08 11:39:54 - INFO -   12. t-17_atr_m5_smooth                       = 0.001708
+2026-01-08 11:39:54 - INFO -   13. t-78_cvd_m15                             = 0.001674
+2026-01-08 11:39:54 - INFO -   14. t-2_dist_sma_200                         = 0.001666
+2026-01-08 11:39:54 - INFO -   15. t-2_rsi_m15                              = 0.001646
+2026-01-08 11:39:54 - INFO -   16. t-73_atr_m5                              = 0.001619
+2026-01-08 11:39:54 - INFO -   17. t-18_atr_m5_native                       = 0.001617
+2026-01-08 11:39:54 - INFO -   18. t-57_atr_m5_smooth                       = 0.001611
+2026-01-08 11:39:54 - INFO -   19. t-3_bb_pos_m15                           = 0.001604
+2026-01-08 11:39:54 - INFO -   20. t-4_dist_sma_20_m15                      = 0.001583
+2026-01-08 11:39:54 - INFO -   21. t-1_dist_sma_200_m5                      = 0.001578
+2026-01-08 11:39:54 - INFO -   22. t-0_cvd_m5                               = 0.001567
+2026-01-08 11:39:54 - INFO -   23. t-74_cvd_m5                              = 0.001557
+2026-01-08 11:39:54 - INFO -   24. t-4_dist_sma_200_m5                      = 0.001544
+2026-01-08 11:39:54 - INFO -   25. t-75_dist_sma_20_m15                     = 0.001542
+2026-01-08 11:39:54 - INFO -   26. t-5_dist_sma_20_m15                      = 0.001536
+2026-01-08 11:39:54 - INFO -   27. t-20_obv_m5                              = 0.001517
+2026-01-08 11:39:54 - INFO -   28. t-2_dist_sma_200_m15                     = 0.001509
+2026-01-08 11:39:54 - INFO -   29. t-0_dist_sma_200_m5                      = 0.001495
+2026-01-08 11:39:54 - INFO -   30. t-5_obv_m15                              = 0.001491
+2026-01-08 11:39:54 - INFO - 
+Aggregated importance by feature type:
+2026-01-08 11:39:54 - INFO -   obv_m15                        = 0.055799
+2026-01-08 11:39:54 - INFO -   atr_m5_smooth                  = 0.053688
+2026-01-08 11:39:54 - INFO -   atr_norm_m5_smooth             = 0.053487
+2026-01-08 11:39:54 - INFO -   rsi_m15                        = 0.053069
+2026-01-08 11:39:54 - INFO -   volume_m15_norm                = 0.051787
+2026-01-08 11:39:54 - INFO -   bb_pos_m15                     = 0.050335
+2026-01-08 11:39:54 - INFO -   cvd_m15                        = 0.049406
+2026-01-08 11:39:54 - INFO -   dist_sma_200_m5                = 0.049151
+2026-01-08 11:39:54 - INFO -   dist_sma_20_m15                = 0.048016
+2026-01-08 11:39:54 - INFO -   adx                            = 0.047656
+2026-01-08 11:39:54 - INFO - Saved feature importance to sequence_feature_importance.json
+2026-01-08 11:39:54 - INFO - Artifacts saved to C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\models
+2026-01-08 11:39:55 - INFO - 
+================================================================================
+2026-01-08 11:39:55 - INFO - TRAINING COMPLETE - SUMMARY
+2026-01-08 11:39:55 - INFO - ================================================================================
+2026-01-08 11:39:55 - INFO - End time: 2026-01-08 11:39:55
+2026-01-08 11:39:55 - INFO - 
+Final Metrics:
+2026-01-08 11:39:55 - INFO -   Window Size:       80 candles
+2026-01-08 11:39:55 - INFO -   Threshold:         0.5000
+2026-01-08 11:39:55 - INFO -   WIN RATE:          0.3437 (34.37%)
+2026-01-08 11:39:55 - INFO -   Precision:         0.3437
+2026-01-08 11:39:55 - INFO -   Recall:            0.9952
+2026-01-08 11:39:55 - INFO -   F1 Score:          0.5109
+2026-01-08 11:39:55 - INFO -   ROC-AUC:           0.6529
+2026-01-08 11:39:55 - INFO -   PR-AUC:            0.4935
+2026-01-08 11:39:55 - INFO - 
+Artifacts saved to: C:\Users\Arek\Documents\Repos\Traiding\Trading-ML\ml\outputs\models
+2026-01-08 11:39:55 - INFO - ================================================================================

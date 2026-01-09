@@ -644,7 +644,7 @@ def optimize_threshold_on_val(
     use_ev_optimization: bool = False,
     use_hybrid_optimization: bool = False,
     ev_win_coefficient: float = 2.0,
-    ev_loss_coefficient: float = 1.0,
+    ev_loss_coefficient: float = -1.0,
     min_trades: int | None = None,
     timestamps: pd.DatetimeIndex | None = None,
     max_trades_per_day: int | None = None,
@@ -672,8 +672,20 @@ def optimize_threshold_on_val(
     logger.info("Running threshold optimization on VAL set...")
 
     thresholds = _candidate_thresholds(y_pred_proba)
+    if min_trades is None:
+        # Keep this aligned with EV/HYBRID helpers.
+        min_trades = max(10, int(np.ceil(0.001 * len(y_true))))
+
+    if (use_ev_optimization or use_hybrid_optimization) and ev_loss_coefficient > 0:
+        logger.warning(
+            "ev_loss_coefficient is positive (%.4f). EV expects losses to be negative; "
+            "consider passing a negative value (e.g., -1.0).",
+            ev_loss_coefficient,
+        )
+
     best_threshold = 0.5
     best_score = -np.inf
+    used_fallback = False
 
     results = []
 
@@ -684,6 +696,19 @@ def optimize_threshold_on_val(
         if max_trades_per_day is not None and timestamps is not None:
             y_pred = _apply_daily_cap(y_pred_proba, y_pred, timestamps, max_trades_per_day)
 
+        n_trades = int(np.sum(y_pred))
+        if n_trades < min_trades:
+            score = -np.inf
+            results.append({
+                'threshold': threshold,
+                'precision': 0.0,
+                'recall': 0.0,
+                'f1': 0.0,
+                'score': score,
+                'n_positives': n_trades,
+            })
+            continue
+
         precision = precision_score(y_true, y_pred, zero_division=0)
         recall = recall_score(y_true, y_pred, zero_division=0)
         f1 = f1_score(y_true, y_pred, zero_division=0)
@@ -691,17 +716,17 @@ def optimize_threshold_on_val(
         if use_hybrid_optimization:
             # EV-based but with floor constraints
             if precision >= min_precision and recall >= min_recall:
-                ev = (precision * ev_win_coefficient -
-                      (1 - precision) * ev_loss_coefficient)
-                score = ev
+                ev_per_trade = precision * ev_win_coefficient + (1.0 - precision) * ev_loss_coefficient
+                ev_total = ev_per_trade * float(n_trades)
+                score = float(ev_total)
             else:
                 score = -np.inf  # Invalid: doesn't meet constraints
 
         elif use_ev_optimization:
             # Pure EV optimization
-            ev = (precision * ev_win_coefficient -
-                  (1 - precision) * ev_loss_coefficient)
-            score = ev
+            ev_per_trade = precision * ev_win_coefficient + (1.0 - precision) * ev_loss_coefficient
+            ev_total = ev_per_trade * float(n_trades)
+            score = float(ev_total)
 
         else:
             # F1-based optimization
@@ -713,28 +738,89 @@ def optimize_threshold_on_val(
             'recall': recall,
             'f1': f1,
             'score': score,
-            'n_positives': np.sum(y_pred),
+            'n_positives': n_trades,
         })
 
         if score > best_score:
             best_score = score
             best_threshold = threshold
 
-    # Log top 5 thresholds
-    results_df = pd.DataFrame(results)
-    results_df = results_df.sort_values('score', ascending=False)
-
-    logger.info(f"\nTop 5 thresholds on VAL set:")
-    for i, row in results_df.head(5).iterrows():
-        logger.info(
-            f"  T={row['threshold']:.2f}: "
-            f"Precision={row['precision']:.4f}, "
-            f"Recall={row['recall']:.4f}, "
-            f"F1={row['f1']:.4f}, "
-            f"Score={row['score']:.4f}"
+    # If HYBRID constraints are infeasible, fall back to a robust picker.
+    # This avoids silently returning the default threshold=0.5.
+    if use_hybrid_optimization and (best_score == -np.inf):
+        used_fallback = True
+        best_threshold = _pick_best_threshold_hybrid(
+            y_true,
+            y_pred_proba,
+            min_precision=min_precision,
+            min_recall=min_recall,
+            win_coefficient=ev_win_coefficient,
+            loss_coefficient=ev_loss_coefficient,
+            min_trades=min_trades,
+            timestamps=timestamps,
+            max_trades_per_day=max_trades_per_day,
+        )
+    elif use_ev_optimization and (best_score == -np.inf):
+        # This can happen if min_trades is very high; still pick the best available EV threshold.
+        used_fallback = True
+        best_threshold = _pick_best_threshold_ev(
+            y_true,
+            y_pred_proba,
+            win_coefficient=ev_win_coefficient,
+            loss_coefficient=ev_loss_coefficient,
+            min_trades=min_trades,
+            timestamps=timestamps,
+            max_trades_per_day=max_trades_per_day,
         )
 
-    return best_threshold, best_score
+    # Log top 5 thresholds (prefer feasible ones; otherwise show best-by-F1).
+    results_df = pd.DataFrame(results)
+    feasible = results_df[np.isfinite(results_df['score'])].sort_values('score', ascending=False)
+    if len(feasible) > 0:
+        logger.info(f"\nTop 5 thresholds on VAL set:")
+        for _, row in feasible.head(5).iterrows():
+            logger.info(
+                f"  T={row['threshold']:.2f}: "
+                f"Precision={row['precision']:.4f}, "
+                f"Recall={row['recall']:.4f}, "
+                f"F1={row['f1']:.4f}, "
+                f"Score={row['score']:.4f}, "
+                f"Trades={int(row['n_positives'])}"
+            )
+    else:
+        logger.warning(
+            "No thresholds met the current constraints on VAL (all scores are -inf). "
+            "Showing top 5 thresholds by F1 instead."
+        )
+        by_f1 = results_df.sort_values('f1', ascending=False)
+        logger.info(f"\nTop 5 thresholds on VAL set (by F1):")
+        for _, row in by_f1.head(5).iterrows():
+            logger.info(
+                f"  T={row['threshold']:.2f}: "
+                f"Precision={row['precision']:.4f}, "
+                f"Recall={row['recall']:.4f}, "
+                f"F1={row['f1']:.4f}, "
+                f"Trades={int(row['n_positives'])}"
+            )
+
+    # Recompute score for the selected threshold so caller logs something meaningful.
+    preds = (y_pred_proba >= best_threshold).astype(int)
+    preds = _apply_daily_cap(y_pred_proba, preds, timestamps, max_trades_per_day)
+    n_trades = int(preds.sum())
+    precision = precision_score(y_true, preds, zero_division=0)
+    recall = recall_score(y_true, preds, zero_division=0)
+    f1 = f1_score(y_true, preds, zero_division=0)
+
+    if used_fallback and not use_ev_optimization and use_hybrid_optimization:
+        # Fallback path in HYBRID picker is F1-driven.
+        best_score = float(f1)
+    elif use_ev_optimization or use_hybrid_optimization:
+        ev_per_trade = precision * ev_win_coefficient + (1.0 - precision) * ev_loss_coefficient
+        best_score = float(ev_per_trade * float(n_trades))
+    else:
+        best_score = float(f1)
+
+    return float(best_threshold), float(best_score)
 
 
 def evaluate_with_fixed_threshold(
