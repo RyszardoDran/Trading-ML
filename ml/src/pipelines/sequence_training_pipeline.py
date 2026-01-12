@@ -43,6 +43,7 @@ sequence building, data splitting/scaling, model training, and artifact saving.
 """
 
 import logging
+import random
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -183,9 +184,8 @@ def run_pipeline(params: PipelineParams) -> Dict[str, Any]:
         - Logs to timestamped file with full pipeline summary
     """
     # Set random seeds for reproducibility
-    np.random.seed(params.random_state)
-    import random
     random.seed(params.random_state)
+    np.random.seed(params.random_state)
     
     # Setup directories
     config = PipelineConfig()
